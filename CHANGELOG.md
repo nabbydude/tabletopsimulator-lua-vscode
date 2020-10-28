@@ -2,6 +2,9 @@
 
 All notable changes to the "tabletopsimulator-lua" extension will be documented in this file.
 
+## [1.0.6]
+- Fixed autocompletion and snippets (Thanks Omnium_ and RVycer)
+
 ## [1.0.5]
 - Fixed published packaging versioning issue
 
@@ -40,3 +43,4 @@ All notable changes to the "tabletopsimulator-lua" extension will be documented 
 - Added Feature: Syntax Highlight
 - Added Feature: Code autocompletion based on OliPro007's Extension
 - Bundled default Console++ and expanded it to add onExternalCommand()
+

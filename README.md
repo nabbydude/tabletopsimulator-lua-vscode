@@ -22,7 +22,7 @@ Extension for VSCode to make writing Lua scripts for  <a href="https://store.ste
 - Get Scripts
 - Send Scripts
 - Syntax Highlight based on the official [Atom plugin](https://github.com/Berserk-Games/atom-tabletopsimulator-lua)
-- Code autocompletion based on OliPro007's [Extension](https://github.com/OliPro007/tabletopsimulator-lua-vscode)
+- Code autocompletion based on OliPro007's [Extension](https://github.com/OliPro007/vscode-tabletopsimulator-lua)
 - #include support with nested, root, and scoped includes ([Read more](http://blog.onelivesleft.com/2017/08/atom-tabletop-simulator-package.html)) 
 - Highly Configurable
 - Built-in Console
