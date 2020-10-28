@@ -4,7 +4,6 @@ import * as net from 'net';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as os from 'os';
 import bundle from 'luabundle';
 import parse from './bbcode/tabletop';
 import { ttsLuaDir, docsFolder, FileHandler } from './filehandler';
@@ -26,6 +25,18 @@ interface ScriptState {
   guid: string,
   script: string,
   ui?: string
+}
+
+function getSearchPaths(): string[] {
+  const paths: string[] = [];
+  const includeOtherFilesPath = vscode.workspace.getConfiguration('TTSLua').get('includeOtherFilesPaths') as string;
+  const bundleSearchPath = vscode.workspace.getConfiguration('TTSLua').get('bundleSearchPath') as string;
+  bundleSearchPath.split(';').map((pattern) => [
+    path.join(ttsLuaDir, pattern),
+    path.join(docsFolder, pattern),
+    ...includeOtherFilesPath.split(';').map((p) => path.join(p, pattern)) || null,
+  ]).map((combo) => paths.push(...combo));
+  return paths;
 }
 
 export default class TTSAdapter {
@@ -96,7 +107,7 @@ export default class TTSAdapter {
   getScripts() {
     const vsFolders = vscode.workspace.workspaceFolders;
     if (!vsFolders || vsFolders.findIndex((val) => val.uri.fsPath === this.dir.fsPath) === -1) {
-      vscode.workspace.updateWorkspaceFolders(0, vsFolders ? vsFolders.length : null, { uri: this.dir });
+      vscode.workspace.updateWorkspaceFolders(vsFolders ? vsFolders.length : 0, null, { uri: this.dir });
     }
     TTSAdapter.sendToTTS(0);
   }
@@ -132,7 +143,7 @@ export default class TTSAdapter {
               //   : luaScript;
               obj.script = vscode.workspace.getConfiguration('TTSLua').get('includeOtherFiles')
                 ? bundle.bundleString(luaScript, {
-                  paths: '?;?.ttslua;?.lua;'.split(';').map((p) => path.join(os.homedir(), 'Documents', 'Tabletop Simulator', p)),
+                  paths: getSearchPaths(),
                   isolate: true,
                 })
                 : luaScript;
@@ -276,9 +287,7 @@ export default class TTSAdapter {
         const basename = `${scriptState.name}.${scriptState.guid}.ttslua`;
         const handler = new FileHandler(basename);
         // handler.create(TTSAdapter.compressScripts(scriptState.script));
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const unbundle = bundle.unbundleString(scriptState.script);
-        // handler.create(unbundle.modules);
+        handler.create(bundle.unbundleString(scriptState.script, { rootOnly: true }).modules[0].content);
         if (autoOpen === 'All' || autoOpen === scriptState.name || previewFlag) { toOpen.push(handler); }
         sentFromTTS[basename] = true;
       });

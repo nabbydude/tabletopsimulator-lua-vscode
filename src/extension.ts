@@ -50,7 +50,7 @@ export function activate(context: vscode.ExtensionContext) {
       adapter.saveAndPlay();
     }),
   );
-  // Install Console ++
+  // Install Console++
   context.subscriptions.push(
     vscode.commands.registerCommand('ttslua.installConsole', () => {
       tryInstallConsole(context.extensionPath);

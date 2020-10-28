@@ -1,4 +1,4 @@
-const BBCode = require('./index.js');
+const BBCode = require('./index');
 
 class Stack {
   count: number;

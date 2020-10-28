@@ -1,12 +1,22 @@
+# Test Suites
 .vscode/**
 .vscode-test/**
 test/**
+
+# Promotional Assets
 assets/docs/**
 assets/github/**
 assets/src/**
+
+# Editor Config
 .gitignore
-vsc-extension-quickstart.md
 **/jsconfig.json
 **/*.map
 **/.eslintrc.json
 .editorconfig
+tsconfig.json
+
+# Additional Files
+node_modules
+src/
+generateSnippets/
