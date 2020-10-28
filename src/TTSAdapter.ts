@@ -1,8 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable no-param-reassign */
 import * as net from 'net';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
+import bundle from 'luabundle';
 import parse from './bbcode/tabletop';
 import { ttsLuaDir, docsFolder, FileHandler } from './filehandler';
 
@@ -124,8 +127,14 @@ export default class TTSAdapter {
               const obj = objects.get(guid);
               // include system
               const luaScript = fs.readFileSync(filePath, 'utf8');
+              // obj.script = vscode.workspace.getConfiguration('TTSLua').get('includeOtherFiles')
+              //   ? this.uncompressIncludes(luaScript, '', docsFolder)
+              //   : luaScript;
               obj.script = vscode.workspace.getConfiguration('TTSLua').get('includeOtherFiles')
-                ? this.uncompressIncludes(luaScript, '', docsFolder)
+                ? bundle.bundleString(luaScript, {
+                  paths: '?;?.ttslua;?.lua;'.split(';').map((p) => path.join(os.homedir(), 'Documents', 'Tabletop Simulator', p)),
+                  isolate: true,
+                })
                 : luaScript;
             } else if (filePath.endsWith('.xml')) {
               const obj = objects.get(guid);
@@ -266,7 +275,10 @@ export default class TTSAdapter {
         // .ttslua Creation
         const basename = `${scriptState.name}.${scriptState.guid}.ttslua`;
         const handler = new FileHandler(basename);
-        handler.create(TTSAdapter.compressScripts(scriptState.script));
+        // handler.create(TTSAdapter.compressScripts(scriptState.script));
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const unbundle = bundle.unbundleString(scriptState.script);
+        // handler.create(unbundle.modules);
         if (autoOpen === 'All' || autoOpen === scriptState.name || previewFlag) { toOpen.push(handler); }
         sentFromTTS[basename] = true;
       });

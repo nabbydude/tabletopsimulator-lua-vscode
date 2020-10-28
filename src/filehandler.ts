@@ -14,7 +14,7 @@ export function tryCreateWorkspaceFolder() {
 }
 
 export function tryInstallConsole(extensionPath: string) {
-  const consoleSrc = path.join(extensionPath, 'src', 'installScripts');
+  const consoleSrc = path.join(extensionPath, 'scripts');
   fs.copyFile(consoleSrc, docsFolder, (err: any) => {
     if (err) console.error(`[TTSLua] Console++ Installation Failed. ${err}`);
     else vscode.window.showInformationMessage('Console++ Installation Successful');
