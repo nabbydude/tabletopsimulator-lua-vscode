@@ -1,4 +1,8 @@
-const BBCode = require('./index');
+// const BBCode = require('./index');
+
+import BBCode from '.';
+
+const { escape } = require('html-escaper');
 
 class Stack {
   count: number;
@@ -26,7 +30,7 @@ class Stack {
   size() { return this.count; }
 }
 
-export default function parse(input: string | undefined) {
+export default function parse(input: string) {
   const stack = new Stack();
   let match;
   let html = new BBCode({
@@ -37,7 +41,7 @@ export default function parse(input: string | undefined) {
     '\\[sub\\](.+?)\\[/sub\\]': '<span style="vertical-align: sub; font-size: smaller;">$1</span>',
     '\\[sup\\](.+?)\\[/sup\\]': '<span style="vertical-align: super; font-size: smaller;">$1</span>',
     '\\n': '<br>',
-  }).parse(input);
+  }).parse(escape(input));
   // While the string contains [hexColor] or [-]
   // eslint-disable-next-line no-cond-assign
   while ((match = RegExp('\\[([a-fA-F|0-9]{6})\\]|\\[-\\]', 'im').exec(html)) !== null) {

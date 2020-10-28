@@ -243,7 +243,7 @@ export default class TTSAdapter {
         TTSAdapter.readFilesFromTTS(ttsMessage.scriptStates);
         break;
       case this.ttsMsg.Print:
-        this.appendToPanel(parse(ttsMessage.message));
+        this.appendToPanel(parse(ttsMessage.message!));
         break;
       case this.ttsMsg.Error:
         this.appendToPanel(ttsMessage.errorMessagePrefix, { class: 'error' });
