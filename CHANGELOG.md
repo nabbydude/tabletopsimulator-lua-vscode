@@ -2,8 +2,9 @@
 
 All notable changes to the "tabletopsimulator-lua" extension will be documented in this file.
 
-## [1.0.6]
+## [1.1]
 - Fixed autocompletion and snippets (Thanks Omnium_ and RVycer)
+- Refactored to use Typescript and AirBnB Linting
 
 ## [1.0.5]
 - Fixed published packaging versioning issue

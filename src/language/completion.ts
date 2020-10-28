@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import * as vscode from 'vscode';
-import * as tm from './textmate';
+import getScopes from './textmate';
 import * as suggestions from './suggestions';
 
 /* class Provider1 implements vscode.CompletionItemProvider {
@@ -67,7 +67,7 @@ class CompletionProvider implements vscode.CompletionItemProvider {
 
   async provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, context: vscode.CompletionContext): Promise<vscode.CompletionItem[] | vscode.CompletionList> {
     const line = document.lineAt(position).text.substr(0, position.character);
-    const scopes = await tm.getScopes(line, position.character);
+    const scopes = await getScopes(line, position.character);
     const completionItems = new Array<vscode.CompletionItem>();
 
     if (['keyword.operator.lua', 'string.quoted.double.lua', 'string.quoted.single.lua'].includes(scopes[1])) {

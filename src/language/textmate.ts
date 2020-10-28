@@ -1,9 +1,8 @@
+/* eslint-disable import/no-dynamic-require */
+/* eslint-disable global-require */
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-
-const tm = getNodeModule('vscode-textmate');
-const oniguruma = getNodeModule('vscode-oniguruma');
 
 function getNodeModulePath(moduleName: string) {
   return path.join(vscode.env.appRoot, 'node_modules.asar', moduleName);
@@ -13,7 +12,10 @@ function getNodeModule(moduleName: string) {
   return require(getNodeModulePath(moduleName));
 }
 
-const grammarPaths: { [key:string]: any } = {
+const tm = getNodeModule('vscode-textmate');
+const oniguruma = getNodeModule('vscode-oniguruma');
+
+const grammarPaths: { [key: string]: any } = {
   'source.ttslua': path.join(__dirname, '../../syntaxes/ttslua.tmLanguage.json'),
 };
 
@@ -46,13 +48,13 @@ const registry = new tm.Registry({
 
 let grammar: any = null;
 
-export async function getScopes(line: string, cursor: number): Promise<string[]> {
+export default async function getScopes(line: string, cursor: number): Promise<string[]> {
   if (!grammar) {
     grammar = await registry.loadGrammar('source.ttslua');
   }
 
   const r = grammar.tokenizeLine(line);
-  const token: any = r.tokens.find((token: { startIndex: number; endIndex: number; }) => cursor >= token.startIndex && cursor < token.endIndex);
+  const token: any = r.tokens.find((e: { startIndex: number; endIndex: number; }) => cursor >= e.startIndex && cursor < e.endIndex);
 
   if (token !== undefined) {
     return token.scopes;

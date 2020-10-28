@@ -29,6 +29,7 @@
       {
         "code": 100
       }
-    ]
+    ],
+    "no-console": "off"
   }
 }

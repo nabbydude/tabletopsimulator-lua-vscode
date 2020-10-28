@@ -1,28 +1,32 @@
 const BBCode = require('./index.js');
 
 class Stack {
+  count: number;
+
+  storage: any;
+
   constructor() {
-    this._count = 0;
-    this._storage = {};
+    this.count = 0;
+    this.storage = {};
   }
 
-  push(value) {
-    this._storage[this._count] = value;
-    this._count++;
+  push(value: { color: string, loc: number }) {
+    this.storage[this.count] = value;
+    this.count += 1;
   }
 
   pop() {
-    if (this._count === 0) return undefined;
-    this._count--;
-    const result = this._storage[this._count];
-    delete this._storage[this._count];
+    if (this.count === 0) return undefined;
+    this.count -= 1;
+    const result = this.storage[this.count];
+    delete this.storage[this.count];
     return result;
   }
 
-  size() { return this._count; }
+  size() { return this.count; }
 }
 
-exports.parse = function (input) {
+export default function parse(input: string | undefined) {
   const stack = new Stack();
   let match;
   let html = new BBCode({
@@ -35,6 +39,7 @@ exports.parse = function (input) {
     '\\n': '<br>',
   }).parse(input);
   // While the string contains [hexColor] or [-]
+  // eslint-disable-next-line no-cond-assign
   while ((match = RegExp('\\[([a-fA-F|0-9]{6})\\]|\\[-\\]', 'im').exec(html)) !== null) {
     if (match[1]) { // Matched a color
       stack.push({ color: match[1], loc: match.index }); // Store color and pos
@@ -71,4 +76,4 @@ exports.parse = function (input) {
     ].join('');
   }
   return html;
-};
+}

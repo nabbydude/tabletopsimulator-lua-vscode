@@ -1,10 +1,10 @@
-module.exports = class BBCode {
+export default class BBCode {
+  codes: any[] = [];
+
   /**
    * @param {Object} codes
    */
-  constructor(codes) {
-    this.codes = [];
-
+  constructor(codes: { [key: string]: string }) {
     this.setCodes(codes);
   }
 
@@ -14,8 +14,8 @@ module.exports = class BBCode {
    * @param {String} text
    * @returns {String}
    */
-  parse(text) {
-    return this.codes.reduce((text, code) => text.replace(code.regexp, code.replacement), text);
+  parse(text: string) {
+    return this.codes.reduce((t, code) => t.replace(code.regexp, code.replacement), text);
   }
 
   /**
@@ -25,7 +25,7 @@ module.exports = class BBCode {
    * @param {String} replacement
    * @returns {BBCode}
    */
-  add(regex, replacement) {
+  add(regex: string, replacement: string) {
     this.codes.push({
       regexp: new RegExp(regex, 'igm'),
       replacement,
@@ -40,8 +40,8 @@ module.exports = class BBCode {
    * @param {Object} codes
    * @returns {BBCode}
    */
-  setCodes(codes) {
-    this.codes = Object.keys(codes).map((regex) => {
+  setCodes(codes: { [key: string]: string }) {
+    this.codes = Object.keys(codes).map((regex: string) => {
       const replacement = codes[regex];
 
       return {
@@ -52,4 +52,4 @@ module.exports = class BBCode {
 
     return this;
   }
-};
+}

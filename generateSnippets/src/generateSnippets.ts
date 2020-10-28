@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention */
+// eslint-disable-next-line import/no-extraneous-dependencies
 import * as decaffeinate from 'decaffeinate';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -80,6 +81,7 @@ function writeSnippets(fd: number, code: string) {
     if (sectionName === 'Control blocks') {
       console.warn('Skipping Section "Control blocks"');
       current = next;
+      // eslint-disable-next-line no-continue
       continue;
     }
 

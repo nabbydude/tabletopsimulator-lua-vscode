@@ -1,11 +1,11 @@
-const os = require('os');
-const fs = require('fs-extra');
-const path = require('path');
-const mkdirp = require('mkdirp');
-const vscode = require('vscode');
+import * as os from 'os';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as mkdirp from 'mkdirp';
+import * as vscode from 'vscode';
 
-const ttsLuaDir = path.join(os.tmpdir(), 'TabletopSimulator', 'Tabletop Simulator Scripts');
-const docsFolder = path.join(os.homedir(), 'Documents', 'Tabletop Simulator');
+export const ttsLuaDir = path.join(os.tmpdir(), 'TabletopSimulator', 'Tabletop Simulator Scripts');
+export const docsFolder = path.join(os.homedir(), 'Documents', 'Tabletop Simulator');
 
 export function tryCreateWorkspaceFolder() {
   try {
@@ -15,7 +15,7 @@ export function tryCreateWorkspaceFolder() {
 
 export function tryInstallConsole(extensionPath: string) {
   const consoleSrc = path.join(extensionPath, 'src', 'installScripts');
-  fs.copy(consoleSrc, docsFolder, (err: any) => {
+  fs.copyFile(consoleSrc, docsFolder, (err: any) => {
     if (err) console.error(`[TTSLua] Console++ Installation Failed. ${err}`);
     else vscode.window.showInformationMessage('Console++ Installation Successful');
   });

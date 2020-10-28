@@ -280,6 +280,8 @@
     "vscode-test": "^1.4.0"
   },
   "dependencies": {
+    "@types/mkdirp": "^1.0.1",
+    "luabundle": "^1.6.0",
     "mkdirp": "^1.0.4",
     "vscode-oniguruma": "^1.4.0"
   }
