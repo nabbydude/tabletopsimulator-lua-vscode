@@ -65,7 +65,7 @@ export default class TTSAdapter {
 
   private executeWhenDone = () => { };
 
-  private webviewPanel: any;
+  private webviewPanel: vscode.WebviewPanel | null = null;
 
   constructor(extensionPath: string) {
     this.dir = vscode.Uri.file(ttsLuaDir);
@@ -287,7 +287,8 @@ export default class TTSAdapter {
         const basename = `${scriptState.name}.${scriptState.guid}.ttslua`;
         const handler = new FileHandler(basename);
         // handler.create(TTSAdapter.compressScripts(scriptState.script));
-        handler.create(bundle.unbundleString(scriptState.script, { rootOnly: true }).modules[0].content);
+        // eslint-disable-next-line no-underscore-dangle
+        handler.create(bundle.unbundleString(scriptState.script, { rootOnly: true }).modules.__root.content);
         if (autoOpen === 'All' || autoOpen === scriptState.name || previewFlag) { toOpen.push(handler); }
         sentFromTTS[basename] = true;
       });
@@ -379,10 +380,10 @@ export default class TTSAdapter {
   }
 
   private webviewPanelInit(webviewPanel: vscode.WebviewPanel) {
-    webviewPanel.webview.html = this.getHtmlForWebview(); // Set webview content
+    webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview); // Set webview content
     webviewPanel.onDidDispose(() => this.disposePanel(), null, this.disposables);
     webviewPanel.onDidChangeViewState(() => {
-      if (webviewPanel.visible) webviewPanel.webview.html = this.getHtmlForWebview();
+      if (webviewPanel.visible) webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview);
     }, null, this.disposables);
     // Handle messages from the webview
     webviewPanel.webview.onDidReceiveMessage((message) => {
@@ -411,8 +412,10 @@ export default class TTSAdapter {
 
   disposePanel() {
     // Clean up our resources
-    this.webviewPanel.dispose();
-    this.webviewPanel = undefined;
+    if (this.webviewPanel) {
+      this.webviewPanel.dispose();
+      this.webviewPanel = null;
+    }
 
     while (this.disposables.length) {
       const x = this.disposables.pop();
@@ -438,11 +441,12 @@ export default class TTSAdapter {
     }
   }
 
-  private getHtmlForWebview() {
+  private getHtmlForWebview(webview: vscode.Webview) {
     const scriptPathOnDisk = vscode.Uri.file(path.join(this.extensionPath, 'assets', 'webView', 'js', 'console.js'));
     const stylePathOnDisk = vscode.Uri.file(path.join(this.extensionPath, 'assets', 'webView', 'css', 'console.css'));
     const scriptUri = scriptPathOnDisk.with({ scheme: 'vscode-resource' });
     const styleUri = stylePathOnDisk.with({ scheme: 'vscode-resource' });
+    const { cspSource } = webview;
     return `<!DOCTYPE html>
         <html lang="en">
         <head>
@@ -459,7 +463,7 @@ export default class TTSAdapter {
             Here's a content security policy that allows loading local scripts and stylesheets, and loading images over https
             This content security policy also implicitly disables inline scripts and styles. It is a best practice to extract all inline styles and scripts to external files so that they can be properly loaded without relaxing the content security policy.
             -->
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-resource: https:; script-src vscode-resource: https:; style-src vscode-resource: 'unsafe-inline'; font-src https:;"/>
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https:; script-src ${cspSource} https:; style-src ${cspSource} 'unsafe-inline'; font-src https:;"/>
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
             <title>Tabletop Simulator Console++</title>
