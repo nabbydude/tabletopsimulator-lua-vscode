@@ -30,8 +30,8 @@ interface ScriptState {
 function getSearchPaths(): string[] {
   const paths: string[] = [];
   const includeOtherFilesPath = vscode.workspace.getConfiguration('TTSLua').get('includeOtherFilesPaths') as string;
-  const bundleSearchPath = vscode.workspace.getConfiguration('TTSLua').get('bundleSearchPath') as string;
-  bundleSearchPath.split(';').map((pattern) => [
+  const bundleSearchPattern = vscode.workspace.getConfiguration('TTSLua').get('bundleSearchPattern') as string;
+  bundleSearchPattern.split(';').map((pattern) => [
     path.join(ttsLuaDir, pattern),
     path.join(docsFolder, pattern),
     ...includeOtherFilesPath.split(';').map((p) => path.join(p, pattern)) || null,

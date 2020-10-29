@@ -192,7 +192,7 @@
         },
         "TTSLua.includeOtherFiles": {
           "title": "Insert other files specified in source code",
-          "markdownDescription": "Convert lua lines containing ``#require(\"<FILE>\")`` into the specified file's contents",
+          "markdownDescription": "Convert lua lines containing ``require(\"<FILE>\")`` into the specified file's contents",
           "type": "boolean",
           "default": true
         },
@@ -201,7 +201,7 @@
           "markdownDescription": "`~/Documents/Tabletop Simulator` is always included. Separate with `;`",
           "type": "string"
         },
-        "TTSLua.bundleSearchPath": {
+        "TTSLua.bundleSearchPattern": {
           "title": "Pattern used to look for additional files",
           "markdownDescription": "Described in Lua's [search path patterns](https://www.lua.org/pil/8.1.html)",
           "type": "string",
@@ -255,12 +255,12 @@
       "description": "Should build correctly most of the time..."
     },
     {
-      "url": "https://badgen.net/badge/uses/JS/yellow",
+      "url": "https://badgen.net/badge/uses/TS/blue",
       "href": "https://github.com/rolandostar/tabletopsimulator-lua-vscode",
       "description": ""
     },
     {
-      "url": "https://badgen.net/badge/designed in/MS Paint/blue",
+      "url": "https://badgen.net/badge/designed in/MS Paint/grey",
       "href": "https://github.com/rolandostar/tabletopsimulator-lua-vscode",
       "description": ""
     },
