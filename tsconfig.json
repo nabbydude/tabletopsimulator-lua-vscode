@@ -6,8 +6,19 @@
     "lib": [
       "es6"
     ],
+    "noUnusedLocals": true,
+    "noImplicitThis": true,
+    "noImplicitReturns": true,
+    "strictNullChecks": true,
     "sourceMap": true,
+    "baseUrl": "./",
     "rootDir": "src",
+    "paths": {
+      "*": [
+        "node_modules/vscode/*",
+        "*"
+      ]
+    },
     "strict": true /* enable all strict type-checking options */
     /* Additional Checks */
     // "noImplicitReturns": true, /* Report error when not all code paths in function return a value. */
@@ -18,5 +29,11 @@
     "generateSnippets",
     "node_modules",
     ".vscode-test"
+  ],
+  "include": [
+    "src/**/*.ts",
+    "./node_modules/vscode/vscode.d.ts",
+    "./node_modules/vscode/lib/*",
+    "src/utils/getCoreNodeModule.js"
   ]
 }

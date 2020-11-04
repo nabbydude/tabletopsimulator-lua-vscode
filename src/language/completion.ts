@@ -240,7 +240,7 @@ class CompletionProvider implements vscode.CompletionItemProvider {
         completionItems.push(this.convertSuggestionToItem(s));
       }
     } else if (isDefaultEventsSection()) {
-      for (const s of suggestions.getDefaultEventsSuggestions(document.fileName.endsWith('-1.ttslua'))) {
+      for (const s of suggestions.getDefaultEventsSuggestions(document.fileName.endsWith('-1.lua'))) {
         completionItems.push(this.convertSuggestionToItem(s));
       }
     } else if (isGlobalSection()) {
@@ -305,7 +305,7 @@ class CompletionProvider implements vscode.CompletionItemProvider {
 
     let replacePattern: any;
     if (replaceType === 'both') {
-      replacePattern = function (_match: string, index: number, parameterType: string, parameterName: string) {
+      replacePattern = function replace(_match: string, index: number, parameterType: string, parameterName: string) {
         const capitalize = (s: string) => s.substring(0, 1).toUpperCase() + s.substring(1);
 
         let format = vscode.workspace.getConfiguration('ttslua').get('parameterFormat') as string;
@@ -440,7 +440,7 @@ class CompletionProvider implements vscode.CompletionItemProvider {
 }
 
 export default function activate(context: vscode.ExtensionContext) {
-  const completionProvider = vscode.languages.registerCompletionItemProvider({ scheme: '', language: 'ttslua' }, new CompletionProvider(), '.');
+  const completionProvider = vscode.languages.registerCompletionItemProvider({ scheme: '', language: 'lua' }, new CompletionProvider(), '.');
 
   context.subscriptions.push(completionProvider);
 }

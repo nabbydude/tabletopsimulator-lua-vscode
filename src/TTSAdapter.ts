@@ -3,7 +3,7 @@
 import * as net from 'net';
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs';
+import * as fs from 'fs-extra';
 import bundle from 'luabundle';
 import parse from './bbcode/tabletop';
 import { ttsLuaDir, docsFolder, FileHandler } from './filehandler';
@@ -97,11 +97,11 @@ export default class TTSAdapter {
         console.error('[TTSLua] Port 39998 is in use, retrying...');
         setTimeout(() => {
           this.server.close();
-          this.server.listen(39998);
+          this.server.listen(39998, 'localhost');
         }, 1000);
       } else console.error(`[TTSLua] Error: ${err}`);
     });
-    this.server.listen(39998); // Open Server
+    this.server.listen(39998, 'localhost'); // Open Server
   }
 
   getScripts() {
@@ -134,7 +134,7 @@ export default class TTSAdapter {
               });
             }
             // Complete the object placeholder with the content of the file
-            if (filePath.endsWith('.ttslua')) {
+            if (filePath.endsWith('.lua')) {
               const obj = objects.get(guid);
               // include system
               const luaScript = fs.readFileSync(filePath, 'utf8');
@@ -174,54 +174,6 @@ export default class TTSAdapter {
     }, (err: Error) => {
       console.error(`Unable to save all opened files: ${err.message}`);
     });
-  }
-
-  private uncompressIncludes(luaScript: string, baseFolder: string, includePath: string, alreadyInserted?: any) {
-    alreadyInserted = alreadyInserted || [];
-    const insertLuaFileRegexp = RegExp('^(\\s*%include\\s+([^\\s].*))', 'm');
-    luaScript = luaScript.replace(/#include /g, '%include ');
-    while (true) {
-      const match = luaScript.match(insertLuaFileRegexp);
-      if (!match) break;
-      let includeFileName = match[2];
-      let sharedFilePath;
-      let newBaseFolder;
-      const doBlock = includeFileName.startsWith('<') && includeFileName.endsWith('>');
-      if (doBlock) {
-        includeFileName = includeFileName.substr(1, includeFileName.length - 2);
-      }
-      if (includeFileName.startsWith('!')) {
-        includeFileName = includeFileName.substr(1);
-        sharedFilePath = includePath;
-        newBaseFolder = path.dirname(includeFileName);
-      } else {
-        sharedFilePath = path.join(includePath, baseFolder);
-        newBaseFolder = path.dirname(path.join(baseFolder, includeFileName));
-      }
-      const sharedFullFile = path.join(sharedFilePath, `${includeFileName}.ttslua`);
-      if (!alreadyInserted.includes(sharedFullFile)) {
-        alreadyInserted.push(sharedFullFile);
-        let sharedFileContents;
-        if (fs.existsSync(sharedFullFile) && fs.statSync(sharedFullFile).isFile()) {
-          sharedFileContents = fs.readFileSync(sharedFullFile, 'utf8');
-          sharedFileContents = this.uncompressIncludes(sharedFileContents, newBaseFolder, includePath, alreadyInserted);
-        } else {
-          throw new Error(`Include missing ${sharedFullFile} from ${includeFileName}`);
-        }
-        luaScript = [
-          luaScript.slice(0, match.index),
-          `---- #include ${match[2]}\n`,
-          doBlock ? 'do\n' : '',
-          sharedFileContents,
-          doBlock ? '\nend\n' : '',
-          `\n---- #include ${match[2]}`,
-          luaScript.slice(match.index! + match[0].length),
-        ].join('');
-      } else {
-        throw new Error(`Circular include detected at ${includeFileName}.\n The file ${sharedFullFile} has been included previously.`);
-      }
-    }
-    return luaScript;
   }
 
   static customMessage(object: any) {
@@ -283,12 +235,17 @@ export default class TTSAdapter {
           // include system
           // let insertedXmlFileRegexp = RegExp('(<!--\\s+include\\s+([^\\s].*)\\s+-->)[\\s\\S]+?\\1', 'g')
         }
-        // .ttslua Creation
-        const basename = `${scriptState.name}.${scriptState.guid}.ttslua`;
+        // .lua Creation
+        const basename = `${scriptState.name}.${scriptState.guid}.lua`;
         const handler = new FileHandler(basename);
-        // handler.create(TTSAdapter.compressScripts(scriptState.script));
-        // eslint-disable-next-line no-underscore-dangle
-        handler.create(bundle.unbundleString(scriptState.script, { rootOnly: true }).modules.__root.content);
+        let fileContent = scriptState.script;
+        try {
+          // eslint-disable-next-line no-underscore-dangle
+          const { content } = bundle.unbundleString(scriptState.script).modules.__root;
+          if (content !== '') { fileContent = content; }
+          // eslint-disable-next-line no-empty
+        } catch (err: any) { }
+        handler.create(fileContent);
         if (autoOpen === 'All' || autoOpen === scriptState.name || previewFlag) { toOpen.push(handler); }
         sentFromTTS[basename] = true;
       });
@@ -313,32 +270,6 @@ export default class TTSAdapter {
     });
   }
 
-  private static compressScripts(luaScript: string) {
-    const storage = [];
-    const insertedLuaFileRegexp = RegExp('^----(\\s*#include\\s+([^\\s].*))', 'm');
-    let match = insertedLuaFileRegexp.exec(luaScript);
-    while (match !== null) {
-      if (storage.length === 0) storage.push(match);
-      else if (storage[storage.length - 1][2] === match[2]) { // found pair
-        const lastMatch = storage.pop();
-        luaScript = [
-          luaScript.slice(0, lastMatch!.index - 1),
-          `\n#include ${match[2]}`,
-          luaScript.slice(match.index + match[0].length),
-        ].join('');
-        match = insertedLuaFileRegexp.exec(luaScript);
-        // eslint-disable-next-line no-continue
-        continue;
-      }
-      luaScript = [
-        luaScript.slice(0, match.index - 1),
-        luaScript.slice(match.index + match[0].length),
-      ].join('');
-      match = insertedLuaFileRegexp.exec(luaScript);
-    }
-    return luaScript;
-  }
-
   private static sendToTTS(messageID: number, object?: object) {
     let out = { messageID };
     if (object) out = { ...out, ...object };
@@ -348,7 +279,9 @@ export default class TTSAdapter {
     });
     client.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'ECONNREFUSED') {
-        console.error(`[TTSLua] Error: Unable to connect to TTS. Is the game open and a save loaded?\n${err}`);
+        vscode.window.showErrorMessage('ERROR: Unable to connect to Tabletop Simulator.\n\n'
+          + 'Check that the game is running and a save has been loaded.\n'
+          + 'If the problem persists, try using the "Save & Play" button in the in-game Modding tab.', { modal: true });
       } else console.error(`[TTSLua] Client ${err}`);
     });
     client.on('end', () => client.destroy());

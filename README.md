@@ -67,6 +67,18 @@ Download or clone this repository and place it under:
 
 ###### Tip: Press enter or double click on the Console++ Panel to focus the command input at the bottom.
 
+### Recomendations
+
+<details>
+  <summary>Click to expand!</summary>
+  
+  ## Heading
+  1. A numbered
+  2. list
+     * With some
+     * Sub bullets
+</details>
+
 --------
 
 #### Console++

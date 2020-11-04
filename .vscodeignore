@@ -1,8 +1,3 @@
-# Test Suites
-.vscode/**
-.vscode-test/**
-test/**
-
 # Promotional Assets
 assets/docs/**
 assets/github/**
@@ -14,9 +9,15 @@ assets/src/**
 **/*.map
 **/.eslintrc.json
 .editorconfig
+.vscode
 tsconfig.json
+package-json.lock
+yarn.lock
+webpack.config.js
 
 # Additional Files
+syntaxes
+generateSnippets
 node_modules
-src/
-generateSnippets/
+src/**
+!node_modules/luabundle
