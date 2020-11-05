@@ -23,25 +23,25 @@ export function activate(context: vscode.ExtensionContext) {
   // Get Scripts
   context.subscriptions.push(
     vscode.commands.registerCommand('ttslua.getScripts', async () => {
-      const option = await vscode.window.showQuickPick([
-        {
-          label: 'Get Scripts',
-          description: '$(alert) This will erase any changes since the last Save & Play.',
-        },
-        { label: 'Cancel' },
-      ], {
-        placeHolder: 'Get Lua Scripts from game?',
-      });
-      if (option && option.label === 'Get Scripts') adapter.getScripts();
+      // const option = await vscode.window.showQuickPick([
+      //   {
+      //     label: 'Get Scripts',
+      //     description: '$(alert) This will erase any changes since the last Save & Play.',
+      //   },
+      //   { label: 'Cancel' },
+      // ], {
+      //   placeHolder: 'Get Lua Scripts from game?',
+      // });
+      // if (option && option.label === 'Get Scripts') adapter.getScripts();
 
       // // Alternative confirmation dialog
       // const Choice = 'Get Scripts';
-      // let chosen = await vscode.window.showInformationMessage(
-      //   'Get Lua Scripts from game?\n\nThis will erase any changes that you have made in Visual Studio Code since the last Save & Play.',
-      //   { modal: true },
-      //   'Get Scripts'
-      // )
-      // if(chosen === 'Get Scripts') adapter.getScripts()
+      const chosen = await vscode.window.showInformationMessage(
+        'Get Lua Scripts from game?\n\nThis will erase any changes that you have made in Visual Studio Code since the last Save & Play.',
+        { modal: true },
+        'Get Scripts',
+      );
+      if (chosen === 'Get Scripts') adapter.getScripts();
     }),
   );
   // Save And Play

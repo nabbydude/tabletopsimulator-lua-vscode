@@ -2,17 +2,18 @@
 
 const path = require('path');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
 
 const config = {
   target: 'node', // vscode extensions run in a Node.js-context 📖 -> https://webpack.js.org/configuration/node/
-  context: path.resolve(__dirname, 'src'),
-  entry: './extension.ts', // the entry point of this extension, 📖 -> https://webpack.js.org/configuration/entry-context/
+  // context: path.resolve(__dirname, 'src'),
+  entry: './src/extension.ts', // the entry point of this extension, 📖 -> https://webpack.js.org/configuration/entry-context/
   output: {
     // the bundle is stored in the 'dist' folder (check package.json), 📖 -> https://webpack.js.org/configuration/output/
     path: path.resolve(__dirname, 'dist'),
     filename: 'extension.js',
     libraryTarget: 'commonjs2',
-    devtoolModuleFilenameTemplate: '../../[resource-path]',
+    devtoolModuleFilenameTemplate: '../[resource-path]',
   },
   devtool: 'source-map',
   externals: {
@@ -24,18 +25,26 @@ const config = {
     new CopyWebpackPlugin({
       patterns: [
         // getCoreNodeModule.js -> dist/node_modules/getCoreNodeModule.js
-        { from: 'utils/getCoreNodeModule.js', to: 'node_modules' },
-        { from: 'language/syntaxes', to: 'syntaxes' },
-        { from: '../node_modules/luabundle/bundle/runtime.lua' },
+        { from: './src/utils/getCoreNodeModule.js', to: 'node_modules' },
+        { from: './src/language/syntaxes', to: 'syntaxes' },
+        { from: './node_modules/luabundle/bundle/runtime.lua' },
       ],
     }),
   ],
   resolve: {
     // support reading TypeScript and JavaScript files, 📖 -> https://github.com/TypeStrong/ts-loader
     extensions: ['.ts', '.js'],
-    alias: {
-      '@': path.resolve(__dirname),
-    },
+  },
+  optimization: {
+    minimize: process.env.NODE_ENV === 'production',
+    minimizer: [new TerserPlugin({
+      terserOptions: {
+        format: {
+          comments: false,
+        },
+      },
+      extractComments: false,
+    })],
   },
   module: {
     rules: [

@@ -67,6 +67,17 @@ export default class TTSAdapter {
 
   private webviewPanel: vscode.WebviewPanel | null = null;
 
+  private progressBars: {
+    [key: string]: {
+      resolve: (value?: unknown) => void,
+      token?: vscode.CancellationToken,
+      progress: vscode.Progress<{
+        message?: string | undefined;
+        increment?: number | undefined;
+      }>
+    }
+  } = {};
+
   constructor(extensionPath: string) {
     this.dir = vscode.Uri.file(ttsLuaDir);
     this.extensionPath = extensionPath;
@@ -109,6 +120,7 @@ export default class TTSAdapter {
     if (!vsFolders || vsFolders.findIndex((val) => val.uri.fsPath === this.dir.fsPath) === -1) {
       vscode.workspace.updateWorkspaceFolders(vsFolders ? vsFolders.length : 0, null, { uri: this.dir });
     }
+    this.updateProgress('Receiving scripts', { increment: 0, message: 'Connecting to TTS' });
     TTSAdapter.sendToTTS(0);
   }
 
@@ -118,10 +130,14 @@ export default class TTSAdapter {
       vscode.window.showErrorMessage('The workspace is not opened on the Tabletop Simulator folder.\nGet Lua Scripts from game before trying to Save and Play.');
       return;
     }
+    this.updateProgress('Sending scripts', { increment: 10 });
     vscode.workspace.saveAll(false).then(async () => {
       const objects = new Map();
       try {
-        fs.readdirSync(ttsLuaDir).forEach((file) => {
+        const files = fs.readdirSync(ttsLuaDir);
+        const totalFiles = Object.keys(files).length;
+        let currentFile = 1;
+        files.forEach((file) => {
           const filePath = path.join(ttsLuaDir, file);
           if (!fs.statSync(filePath).isDirectory()) {
             const tokens = file.split('.');
@@ -154,6 +170,8 @@ export default class TTSAdapter {
               obj.ui = fs.readFileSync(filePath, 'utf8');
             }
           }
+          // eslint-disable-next-line no-plusplus
+          this.updateProgress('Sending scripts', { increment: 90 / totalFiles, message: `${currentFile++}/${totalFiles}` });
         });
       } catch (error) {
         vscode.window.showErrorMessage(error.message);
@@ -171,6 +189,10 @@ export default class TTSAdapter {
         const f = this.executeWhenDone; f();
         this.executeWhenDone = function executeWhenDone() { };
       }
+      this.updateProgress('Sending scripts', { increment: 0, message: 'Done!' });
+      setTimeout(() => {
+        this.finishProgres('Sending scripts');
+      }, 3000);
     }, (err: Error) => {
       console.error(`Unable to save all opened files: ${err.message}`);
     });
@@ -188,11 +210,13 @@ export default class TTSAdapter {
   private handleMessage(ttsMessage: TtsMessage) {
     switch (ttsMessage.messageID) {
       case this.ttsMsg.pushObject:
-        TTSAdapter.readFilesFromTTS(ttsMessage.scriptStates, true);
+        this.updateProgress('Receiving scripts', { increment: 0 });
+        this.readFilesFromTTS(ttsMessage.scriptStates, true);
         break;
       case this.ttsMsg.NewGame:
         if (this.savedAndPlayed) break;
-        TTSAdapter.readFilesFromTTS(ttsMessage.scriptStates);
+        this.updateProgress('Receiving scripts', { increment: 0 });
+        this.readFilesFromTTS(ttsMessage.scriptStates);
         break;
       case this.ttsMsg.Print:
         this.appendToPanel(parse(ttsMessage.message!));
@@ -213,15 +237,17 @@ export default class TTSAdapter {
     }
   }
 
-  static readFilesFromTTS(scriptStates: ScriptState[] | undefined, previewFlag?: boolean) {
+  private readFilesFromTTS(scriptStates: ScriptState[] | undefined, previewFlag?: boolean) {
     previewFlag = previewFlag || false;
-
     const toOpen: FileHandler[] = [];
     const sentFromTTS: { [key: string]: boolean } = {};
     const autoOpen = vscode.workspace.getConfiguration('TTSLua').get('autoOpen');
     const createXml = vscode.workspace.getConfiguration('TTSLua').get('createXml');
+    console.dir(scriptStates);
     if (scriptStates) {
+      // const increment = 45 / Object.keys(scriptStates).length;
       scriptStates.forEach((scriptState) => {
+        // this.updateProgress('Receiving scripts', { increment });
         scriptState.name = scriptState.name.replace(/([":<>/\\|?*])/g, '');
         // XML Creation
         if (scriptState.ui || createXml) {
@@ -235,6 +261,7 @@ export default class TTSAdapter {
           // include system
           // let insertedXmlFileRegexp = RegExp('(<!--\\s+include\\s+([^\\s].*)\\s+-->)[\\s\\S]+?\\1', 'g')
         }
+        // this.updateProgress('Receiving scripts', { increment });
         // .lua Creation
         const basename = `${scriptState.name}.${scriptState.guid}.lua`;
         const handler = new FileHandler(basename);
@@ -264,7 +291,11 @@ export default class TTSAdapter {
       toOpenResults.push(toOpen[index].open());
     }
     Promise.all(toOpenResults).then(() => {
-      vscode.window.showInformationMessage(`Received ${filesCount} files`);
+      // vscode.window.showInformationMessage(`Received ${filesCount} files`);
+      this.updateProgress('Receiving scripts', { increment: 100, message: `Received ${filesCount} files!` });
+      setTimeout(() => {
+        this.finishProgres('Receiving scripts');
+      }, 3000);
     }, (err: Error) => {
       console.error(`Unable to open files: ${err.message}`);
     });
@@ -409,5 +440,22 @@ export default class TTSAdapter {
             <script id="mainScript" type="module" src="${scriptUri}" clearOnFocus="${vscode.workspace.getConfiguration('TTSLua').get('clearOnFocus')}"></script>
         </body>
         </html>`;
+  }
+
+  private updateProgress(title: string, options: { increment: number, message?: string }) {
+    if (!(title in this.progressBars)) {
+      vscode.window.withProgress({
+        location: vscode.ProgressLocation.Window,
+        title,
+        cancellable: false,
+      }, (progress) => new Promise((resolve) => { this.progressBars[title] = { resolve, progress }; }));
+    }
+    this.progressBars[title].progress.report(options);
+  }
+
+  private finishProgres(title: string) {
+    if (!(title in this.progressBars)) throw new Error(`[TTSLua] Attempted to finish a non-existant progressbar "${title}"`);
+    this.progressBars[title].resolve();
+    delete this.progressBars[title];
   }
 }
