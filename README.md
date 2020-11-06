@@ -70,7 +70,27 @@ Download or clone this repository and place it under:
 ### Recomendations
 
 <details>
-  <summary>Click to expand!</summary>
+  <summary>Use enhanced moonsharp</summary>
+  
+  ## Heading
+  1. A numbered
+  2. list
+     * With some
+     * Sub bullets
+</details>
+
+<details>
+  <summary>Use emmylua</summary>
+  
+  ## Heading
+  1. A numbered
+  2. list
+     * With some
+     * Sub bullets
+</details>
+
+<details>
+  <summary>source control</summary>
   
   ## Heading
   1. A numbered

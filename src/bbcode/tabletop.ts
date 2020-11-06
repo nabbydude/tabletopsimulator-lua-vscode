@@ -1,25 +1,23 @@
-// const BBCode = require('./index');
-
-import BBCode from '.';
+import BBCodeParser from './parser';
 
 const { escape } = require('html-escaper');
 
 class Stack {
-  count: number;
+  private count: number;
 
-  storage: any;
+  private storage: any;
 
-  constructor() {
+  public constructor() {
     this.count = 0;
     this.storage = {};
   }
 
-  push(value: { color: string, loc: number }) {
+  public push(value: { color: string, loc: number }) {
     this.storage[this.count] = value;
     this.count += 1;
   }
 
-  pop() {
+  public pop() {
     if (this.count === 0) return undefined;
     this.count -= 1;
     const result = this.storage[this.count];
@@ -27,19 +25,19 @@ class Stack {
     return result;
   }
 
-  size() { return this.count; }
+  public size() { return this.count; }
 }
 
 export default function parse(input: string) {
   const stack = new Stack();
   let match;
-  let html = new BBCode({
-    '\\[b\\](.+?)\\[/b\\]': '<span style="font-weight: bold">$1</span>',
-    '\\[i\\](.+?)\\[/i\\]': '<span style="font-style: italic">$1</span>',
-    '\\[u\\](.+?)\\[/u\\]': '<span style="text-decoration: underline">$1</span>',
-    '\\[s\\](.+?)\\[/s\\]': '<span style="text-decoration: line-through">$1</span>',
-    '\\[sub\\](.+?)\\[/sub\\]': '<span style="vertical-align: sub; font-size: smaller;">$1</span>',
-    '\\[sup\\](.+?)\\[/sup\\]': '<span style="vertical-align: super; font-size: smaller;">$1</span>',
+  let html = new BBCodeParser({
+    '\\[b\\](.+?)\\[/b\\]': '<span class="bold">$1</span>',
+    '\\[i\\](.+?)\\[/i\\]': '<span class="italic">$1</span>',
+    '\\[u\\](.+?)\\[/u\\]': '<span class="underline">$1</span>',
+    '\\[s\\](.+?)\\[/s\\]': '<span class="lineThrough">$1</span>',
+    '\\[sub\\](.+?)\\[/sub\\]': '<span class="sub">$1</span>',
+    '\\[sup\\](.+?)\\[/sup\\]': '<span class="sup">$1</span>',
     '\\n': '<br>',
   }).parse(escape(input));
   // While the string contains [hexColor] or [-]

@@ -1,50 +1,40 @@
-import * as os from 'os';
-import * as fse from 'fs-extra';
-import * as path from 'path';
-import * as mkdirp from 'mkdirp';
-import * as vscode from 'vscode';
+import { tmpdir, homedir } from 'os';
+import { join, normalize, dirname } from 'path';
+import { workspace as ws, window as wd, Uri } from 'vscode';
 
-export const ttsLuaDir = path.join(os.tmpdir(), 'TabletopSimulator', 'Tabletop Simulator Scripts');
-export const docsFolder = path.join(os.homedir(), 'Documents', 'Tabletop Simulator');
+export const tempFolder = join(tmpdir(), 'TabletopSimulator', 'Tabletop Simulator Scripts');
+export const docsFolder = join(homedir(), 'Documents', 'Tabletop Simulator');
 
-export function tryCreateWorkspaceFolder() {
+export async function createWorkspaceFolder() {
   try {
-    if (!fse.existsSync(ttsLuaDir)) mkdirp.sync(ttsLuaDir);
-  } catch (e) { console.error(`[TTSLua] Failed to create workspace folder: ${e}`); }
+    await ws.fs.createDirectory(Uri.file(tempFolder));
+  } catch (reason: any) { wd.showErrorMessage(`Failed to create workspace folder: ${reason}`); }
 }
 
-export function tryInstallConsole(extensionPath: string) {
-  const consoleSrc = path.join(extensionPath, 'scripts');
-  fse.copy(consoleSrc, docsFolder, (err: NodeJS.ErrnoException | null) => {
-    if (err) {
-      vscode.window.showErrorMessage(`[TTSLua] Console++ Installation Failed. ${err.message}`);
-      if (err.code === 'EPERM') {
-        vscode.window.showWarningMessage('[TTSLua] Try reinstalling Console++ with VSCode running as Administrator');
-      }
-    } else vscode.window.showInformationMessage('[TTSLua] Console++ Installation Successful');
-  });
+export async function installConsole(extensionPath: string) {
+  const sourceUri = Uri.file(join(extensionPath, 'scripts'));
+  const targetUri = Uri.file(docsFolder);
+  try {
+    await ws.fs.copy(sourceUri, targetUri, { overwrite: true });
+  } catch (reason: any) { wd.showErrorMessage(`Console++ Installation Failed: ${reason}`); }
+  wd.showInformationMessage('Console++ Installation Successful');
 }
 
 export class FileHandler {
-  basename: string;
+  private FileUri: Uri;
 
-  tempFile: string;
-
-  constructor(basename: string) {
-    this.basename = basename;
-    this.tempFile = path.normalize(path.join(ttsLuaDir, this.basename));
+  public constructor(basename: string) {
+    this.FileUri = Uri.file(normalize(join(tempFolder, basename)));
   }
 
-  create(text: string) {
-    const dirname = path.dirname(this.tempFile);
-    mkdirp.sync(dirname);
-    const file = fse.openSync(this.tempFile, 'w');
-    fse.writeSync(file, text);
-    fse.closeSync(file);
+  public create(text: string) {
+    ws.fs.createDirectory(Uri.file(dirname(this.FileUri.fsPath))).then(() => {
+      ws.fs.writeFile(this.FileUri, Buffer.from(text, 'utf8'));
+    });
   }
 
-  open() {
-    return vscode.window.showTextDocument(vscode.Uri.file(this.tempFile), {
+  public open() {
+    return wd.showTextDocument(this.FileUri, {
       preserveFocus: true,
       preview: false,
     });

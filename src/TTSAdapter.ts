@@ -1,15 +1,26 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable no-param-reassign */
 import * as net from 'net';
-import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs-extra';
+import {
+  workspace as ws,
+  window as wd,
+  Webview,
+  WebviewPanel,
+  Uri,
+  FileType,
+  ViewColumn,
+} from 'vscode';
+import { join, posix } from 'path';
 import bundle from 'luabundle';
-import parse from './bbcode/tabletop';
-import { ttsLuaDir, docsFolder, FileHandler } from './filehandler';
 
-interface TtsMessage {
-  messageID: number,
+import parse from './bbcode/tabletop';
+import { tempFolder, docsFolder, FileHandler } from './filehandler';
+
+/**
+ * Shape of data received from TTS
+ */
+interface TTSMessage {
+  messageID: RxMsgType,
   scriptStates?: ScriptState[],
   message?: string,
   error?: string,
@@ -20,6 +31,9 @@ interface TtsMessage {
   script?: string
 }
 
+/**
+ * Shape of every object received
+ */
 interface ScriptState {
   name: string,
   guid: string,
@@ -27,300 +41,329 @@ interface ScriptState {
   ui?: string
 }
 
+/**
+ * Types of messages that can be received
+ */
+enum RxMsgType {
+  ObjectPushed,
+  NewGame,
+  Print,
+  Error,
+  CustomMessage,
+  Return,
+  GameSaved,
+  ObjectCreated,
+}
+
+/**
+ * Types of messages that can be sent
+ */
+enum TxMsgType {
+  GetScripts,
+  SaveAndPlay,
+  CustomMessage,
+  ExecuteLua,
+}
+
+/**
+ * Forms an array with directory paths where to look for files to be included
+ */
 function getSearchPaths(): string[] {
   const paths: string[] = [];
-  const includeOtherFilesPath = vscode.workspace.getConfiguration('TTSLua').get('includeOtherFilesPaths') as string;
-  const bundleSearchPattern = vscode.workspace.getConfiguration('TTSLua').get('bundleSearchPattern') as string;
+  const config = ws.getConfiguration('TTSLua');
+  const includeOtherFilesPath = config.get('includeOtherFilesPaths') as string;
+  const bundleSearchPattern = config.get('bundleSearchPattern') as string;
   bundleSearchPattern.split(';').map((pattern) => [
-    path.join(ttsLuaDir, pattern),
-    path.join(docsFolder, pattern),
-    ...includeOtherFilesPath.split(';').map((p) => path.join(p, pattern)) || null,
+    join(tempFolder, pattern),
+    join(docsFolder, pattern),
+    ...includeOtherFilesPath.split(';').map((p) => join(p, pattern)) || null,
   ]).map((combo) => paths.push(...combo));
   return paths;
 }
 
 export default class TTSAdapter {
-  private dir: any;
+  private tempUri: Uri;
 
   private disposables: any = [];
 
   private extensionPath: string;
 
-  private ttsMsg: { [key: string]: number } = { // Poor man's enum
-    pushObject: 0,
-    NewGame: 1,
-    Print: 2,
-    Error: 3,
-    Custom: 4,
-    Return: 5,
-    GameSaved: 6,
-    ObjectCreated: 7,
-  };
-
-  private timeout: NodeJS.Timeout;
-
-  private savedAndPlayed: boolean = true;
+  private savedAndPlayed: boolean = false;
 
   private server: any;
 
   private executeWhenDone = () => { };
 
-  private webviewPanel: vscode.WebviewPanel | null = null;
+  private webviewPanel: WebviewPanel | null = null;
 
-  private progressBars: {
-    [key: string]: {
-      resolve: (value?: unknown) => void,
-      token?: vscode.CancellationToken,
-      progress: vscode.Progress<{
-        message?: string | undefined;
-        increment?: number | undefined;
-      }>
-    }
-  } = {};
-
-  constructor(extensionPath: string) {
-    this.dir = vscode.Uri.file(ttsLuaDir);
+  /**
+   * Builds new TTSAdapter instance
+   * @param extensionPath - Path where the extension is running, should be passed down from context
+   */
+  public constructor(extensionPath: string) {
+    this.tempUri = Uri.file(tempFolder);
     this.extensionPath = extensionPath;
-
-    this.timeout = setTimeout(() => {
-      this.savedAndPlayed = false;
-    }, 3000);
     this.initServer();
   }
 
-  initServer() {
-    // Initialize Server for incoming TTS Messages
+  /**
+   * Starts a server where Tabletop will send data to
+   * @param port - Port where server will bind to. Defaults to `39998`
+   */
+  public initServer(port: number = 39998) {
     this.server = net.createServer((socket: net.Socket) => {
       const chunks: any = [];
       // Set timeout in case of unexpected connection drop
       socket.setTimeout(10000);
       socket.on('timeout', () => socket.end());
-      socket.on('end', () => {
-        const input = Buffer.concat(chunks);
-        this.handleMessage(JSON.parse(input.toString()) as TtsMessage);
-        socket.end();
-      }); // Normal disconnect after data read
       socket.on('data', (chunk) => chunks.push(chunk));
+      socket.on('end', () => {
+        this.handleMessage(JSON.parse(Buffer.concat(chunks).toString()) as TTSMessage);
+        socket.end();
+      });
     });
     this.server.on('listening', () => console.debug('[TTSLua] Server open.'));
     this.server.on('error', (err: any) => {
       if (err.code === 'EADDRINUSE') {
-        console.error('[TTSLua] Port 39998 is in use, retrying...');
+        console.error(`[TTSLua] Port ${port} is in use, retrying...`);
         setTimeout(() => {
           this.server.close();
-          this.server.listen(39998, 'localhost');
+          this.server.listen(port, 'localhost');
         }, 1000);
       } else console.error(`[TTSLua] Error: ${err}`);
     });
-    this.server.listen(39998, 'localhost'); // Open Server
+    this.server.listen(port, 'localhost'); // Open Server
   }
 
-  getScripts() {
-    const vsFolders = vscode.workspace.workspaceFolders;
-    if (!vsFolders || vsFolders.findIndex((val) => val.uri.fsPath === this.dir.fsPath) === -1) {
-      vscode.workspace.updateWorkspaceFolders(vsFolders ? vsFolders.length : 0, null, { uri: this.dir });
+  /**
+   * Retrieves scripts from currently open savegame
+   */
+  public async getScripts() {
+    const vsFolders = ws.workspaceFolders;
+    if (!vsFolders || vsFolders.findIndex((dir) => dir.uri.fsPath === this.tempUri.fsPath) === -1) {
+      ws.updateWorkspaceFolders(vsFolders ? vsFolders.length : 0, null, { uri: this.tempUri });
     }
-    this.updateProgress('Receiving scripts', { increment: 0, message: 'Connecting to TTS' });
-    TTSAdapter.sendToTTS(0);
+    TTSAdapter.sendToTTS(TxMsgType.GetScripts);
   }
 
-  saveAndPlay() {
-    const vsFolders = vscode.workspace.workspaceFolders;
-    if (!vsFolders || vsFolders.findIndex((val) => val.uri.fsPath === this.dir.fsPath) === -1) {
-      vscode.window.showErrorMessage('The workspace is not opened on the Tabletop Simulator folder.\nGet Lua Scripts from game before trying to Save and Play.');
+  /**
+   * Sends all Scripts to the game
+   */
+  public async saveAndPlay() {
+    // When sending scripts, the Temp folder must be present in workspace
+    const vsFolders = ws.workspaceFolders;
+    if (!vsFolders || vsFolders.findIndex((dir) => dir.uri.fsPath === this.tempUri.fsPath) === -1) {
+      wd.showErrorMessage(
+        'The workspace is not opened on the Tabletop Simulator folder.\n'
+        + 'Get Lua Scripts from game before trying to Save and Play.',
+      );
       return;
     }
-    this.updateProgress('Sending scripts', { increment: 10 });
-    vscode.workspace.saveAll(false).then(async () => {
-      const objects = new Map();
-      try {
-        const files = fs.readdirSync(ttsLuaDir);
-        const totalFiles = Object.keys(files).length;
-        let currentFile = 1;
-        files.forEach((file) => {
-          const filePath = path.join(ttsLuaDir, file);
-          if (!fs.statSync(filePath).isDirectory()) {
-            const tokens = file.split('.');
-            const name = tokens[0];
-            const guid = tokens[1];
-            // If guid is not present in objects, create placeholder
-            if (!objects.has(guid)) {
-              objects.set(guid, {
-                name, guid, script: '', ui: '',
+    // This would create a status bar with spinning icon, but it finishes too fast to see :(
+    /* let statusBar = wd.setStatusBarMessage('$(sync~spin) Sending scripts'); */
+    // Save all documents in the workspace
+    try { await ws.saveAll(false); } catch (reason: any) {
+      console.error(`Unable to save opened files.\nDetail: ${reason}`);
+      return;
+    }
+    // Read files contained in the Temp folder
+    let files: [string, FileType][];
+    try { files = await ws.fs.readDirectory(this.tempUri); } catch (reason: any) {
+      wd.showErrorMessage(
+        'Unable to read TTS Scripts directory.\n'
+        + `Details: ${reason}`,
+      );
+      return;
+    }
+    // For each file in Temp folder, create the LuaString to be sent
+    const scripts: { [key: string]: ScriptState } = {};
+    for (let i = 0; i < files.length; i += 1) {
+      const [file, filetype] = files[i];
+      const fileUri = this.tempUri.with({ path: posix.join(this.tempUri.path, file) });
+      // Skip directories
+      if (filetype !== FileType.Directory) {
+        const [name, guid] = file.split('.');
+        if (!(guid in scripts)) scripts[guid] = { name, guid, script: '' };
+        // Complete the script placeholder with the content of the file, bundling when needed
+        if (file.endsWith('.lua')) {
+          // eslint-disable-next-line no-await-in-loop
+          const luaScript = Buffer.from(await ws.fs.readFile(fileUri)).toString('utf-8');
+          if (ws.getConfiguration('TTSLua').get('includeOtherFiles')) {
+            try {
+              scripts[guid].script = bundle.bundleString(luaScript, {
+                paths: getSearchPaths(),
+                isolate: true,
+                rootModuleName: file,
+                force: true,
               });
-            }
-            // Complete the object placeholder with the content of the file
-            if (filePath.endsWith('.lua')) {
-              const obj = objects.get(guid);
-              // include system
-              const luaScript = fs.readFileSync(filePath, 'utf8');
-              // obj.script = vscode.workspace.getConfiguration('TTSLua').get('includeOtherFiles')
-              //   ? this.uncompressIncludes(luaScript, '', docsFolder)
-              //   : luaScript;
-              obj.script = vscode.workspace.getConfiguration('TTSLua').get('includeOtherFiles')
-                ? bundle.bundleString(luaScript, {
-                  paths: getSearchPaths(),
-                  isolate: true,
-                })
-                : luaScript;
-            } else if (filePath.endsWith('.xml')) {
-              const obj = objects.get(guid);
-              // let horizontalWhitespaceSet = '\\t\\v\\f\\r \u00a0\u2000-\u200b\u2028-\u2029\u3000'
-              // let insertXmlFileRegexp = RegExp('(^|\\n)([' + horizontalWhitespaceSet + ']*)(.*)<Include\\s+src=(\'|")(.+)\\4\\s*/>', 'g')
-              obj.ui = fs.readFileSync(filePath, 'utf8');
+            } catch (error: any) {
+              wd.showErrorMessage(error.message);
             }
           }
-          // eslint-disable-next-line no-plusplus
-          this.updateProgress('Sending scripts', { increment: 90 / totalFiles, message: `${currentFile++}/${totalFiles}` });
-        });
-      } catch (error) {
-        vscode.window.showErrorMessage(error.message);
-        return;
+        } else if (file.endsWith('.xml')) {
+          // let horizontalWhitespaceSet = '\\t\\v\\f\\r \u00a0\u2000-\u200b\u2028-\u2029\u3000'
+          // let insertXmlFileRegexp = RegExp('(^|\\n)([' + horizontalWhitespaceSet + ']*)(.*)<Include\\s+src=(\'|")(.+)\\4\\s*/>', 'g')
+          // eslint-disable-next-line no-await-in-loop
+          scripts[guid].ui = Buffer.from(await ws.fs.readFile(fileUri)).toString('utf-8');
+        }
       }
-      // Hackish way to detect when panel is cleared.
-      this.executeWhenDone = () => {
-        TTSAdapter.sendToTTS(1, { scriptStates: [...objects.values()] });
-        this.savedAndPlayed = true;
-        this.timeout.refresh();
-      };
-      if (vscode.workspace.getConfiguration('TTSLua').get('clearOnReload')) {
-        this.clearPanel();
-      } else {
-        const f = this.executeWhenDone; f();
-        this.executeWhenDone = function executeWhenDone() { };
-      }
-      this.updateProgress('Sending scripts', { increment: 0, message: 'Done!' });
-      setTimeout(() => {
-        this.finishProgres('Sending scripts');
-      }, 3000);
-    }, (err: Error) => {
-      console.error(`Unable to save all opened files: ${err.message}`);
-    });
+    }
+    // Once the scripts content has been built, send to game
+    // Depending on config, send after clearing panel (Hack)
+    this.executeWhenDone = () => {
+      this.savedAndPlayed = true;
+      TTSAdapter.sendToTTS(TxMsgType.SaveAndPlay, { scriptStates: [...Object.values(scripts)] });
+      const statusBar = wd.setStatusBarMessage(`$(cloud-upload) Sent ${files.length} files`);
+      setTimeout(() => { statusBar.dispose(); }, 1500);
+      // Single-fire autodestructs function after being called
+      this.executeWhenDone = function executeWhenDone() { };
+    };
+    if (ws.getConfiguration('TTSLua').get('clearOnReload')) this.clearPanel();
+    else this.executeWhenDone();
   }
 
-  static customMessage(object: any) {
-    TTSAdapter.sendToTTS(2, { customMessage: object });
+  /**
+   * Sends a custom structured object
+   * @param object - Table to be sent to game
+   */
+  public static customMessage(object: any) {
+    TTSAdapter.sendToTTS(TxMsgType.CustomMessage, { customMessage: object });
   }
 
-  static executeLuaCode(script: string, guid: string) {
-    if (guid) TTSAdapter.sendToTTS(3, { guid, script });
-    else TTSAdapter.sendToTTS(3, { guid: '-1', script });
+  /**
+   * Executes arbitrary lua
+   * @param script - Lua Script to be executed
+   * @param guid - GUID of object from where lua will execute
+   */
+  public static executeLuaCode(script: string, guid: string = '-1') {
+    TTSAdapter.sendToTTS(TxMsgType.ExecuteLua, { guid, script });
   }
 
-  private handleMessage(ttsMessage: TtsMessage) {
+  /**
+   * Calls corresponding function according to message type
+   * @param ttsMessage - Message received from TTS
+   */
+  private handleMessage(ttsMessage: TTSMessage) {
     switch (ttsMessage.messageID) {
-      case this.ttsMsg.pushObject:
-        this.updateProgress('Receiving scripts', { increment: 0 });
-        this.readFilesFromTTS(ttsMessage.scriptStates, true);
+      case RxMsgType.ObjectPushed:
+        this.readFilesFromTTS(ttsMessage.scriptStates!, true);
         break;
-      case this.ttsMsg.NewGame:
-        if (this.savedAndPlayed) break;
-        this.updateProgress('Receiving scripts', { increment: 0 });
-        this.readFilesFromTTS(ttsMessage.scriptStates);
+      case RxMsgType.NewGame:
+        if (!this.savedAndPlayed) this.readFilesFromTTS(ttsMessage.scriptStates!);
+        this.savedAndPlayed = false;
         break;
-      case this.ttsMsg.Print:
+      case RxMsgType.Print:
         this.appendToPanel(parse(ttsMessage.message!));
         break;
-      case this.ttsMsg.Error:
+      case RxMsgType.Error:
         this.appendToPanel(ttsMessage.errorMessagePrefix, { class: 'error' });
         break;
-      case this.ttsMsg.Custom: break; // Can be used instead of print for console++
-      case this.ttsMsg.Return: break; // Not implemented
-      case this.ttsMsg.GameSaved:
-        if (vscode.workspace.getConfiguration('TTSLua').get('logSave')) {
+      case RxMsgType.CustomMessage: break; // Can be used instead of print for console++
+      case RxMsgType.Return: break; // Not implemented
+      case RxMsgType.GameSaved:
+        if (ws.getConfiguration('TTSLua').get('logSave')) {
           const today = new Date();
-          this.appendToPanel(`[${today.getHours()}:${today.getMinutes()}:${today.getSeconds()}] 💾 Game Saved`);
+          const timestamp = `${today.getHours()}:${today.getMinutes()}:${today.getSeconds()}`;
+          this.appendToPanel(`[${timestamp}] 💾 Game Saved`);
         }
         break;
-      case this.ttsMsg.ObjectCreated: break; // Not Implemented
+      case RxMsgType.ObjectCreated: break; // Not Implemented
       default: break;
     }
   }
 
-  private readFilesFromTTS(scriptStates: ScriptState[] | undefined, previewFlag?: boolean) {
-    previewFlag = previewFlag || false;
+  /**
+   * Creates files into workspace from received scriptStates
+   * @param scriptStates - State of all received scripts
+   * @param previewFlag - If true, will open files in editor
+   */
+  private async readFilesFromTTS(scriptStates: ScriptState[], previewFlag: boolean = false) {
+    // Read scriptStates, write them to files and determine which should be opened
     const toOpen: FileHandler[] = [];
-    const sentFromTTS: { [key: string]: boolean } = {};
-    const autoOpen = vscode.workspace.getConfiguration('TTSLua').get('autoOpen');
-    const createXml = vscode.workspace.getConfiguration('TTSLua').get('createXml');
-    console.dir(scriptStates);
+    const filesRecv: { [key: string]: boolean } = {};
+    const autoOpen = ws.getConfiguration('TTSLua').get('autoOpen');
+    const createXml = ws.getConfiguration('TTSLua').get('createXml');
+    // This would create a status bar with spinning icon, but it finishes too fast to see :(
+    /* let statusBar = wd.setStatusBarMessage('$(sync~spin) Receiving scripts'); */
+    if (autoOpen === 'All') previewFlag = true;
     if (scriptStates) {
-      // const increment = 45 / Object.keys(scriptStates).length;
       scriptStates.forEach((scriptState) => {
-        // this.updateProgress('Receiving scripts', { increment });
+        // Sanitize script name
         scriptState.name = scriptState.name.replace(/([":<>/\\|?*])/g, '');
-        // XML Creation
+        // XML File Creation
         if (scriptState.ui || createXml) {
           const basename = `${scriptState.name}.${scriptState.guid}.xml`;
           const handler = new FileHandler(basename);
           if (scriptState.ui) {
             handler.create(scriptState.ui.trim());
           } else handler.create('');
-          if (autoOpen === 'All' || previewFlag) toOpen.push(handler);
-          sentFromTTS[basename] = true;
-          // include system
+          if (previewFlag) toOpen.push(handler);
+          filesRecv[basename] = true;
           // let insertedXmlFileRegexp = RegExp('(<!--\\s+include\\s+([^\\s].*)\\s+-->)[\\s\\S]+?\\1', 'g')
         }
-        // this.updateProgress('Receiving scripts', { increment });
-        // .lua Creation
+        // Lua File Creation
         const basename = `${scriptState.name}.${scriptState.guid}.lua`;
         const handler = new FileHandler(basename);
         let fileContent = scriptState.script;
         try {
-          // eslint-disable-next-line no-underscore-dangle
-          const { content } = bundle.unbundleString(scriptState.script).modules.__root;
+          const data = bundle.unbundleString(scriptState.script);
+          const { content } = data.modules[data.metadata.rootModuleName];
           if (content !== '') { fileContent = content; }
-          // eslint-disable-next-line no-empty
-        } catch (err: any) { }
+        } catch (reason: any) { console.error(`Problem unbundling script: ${reason}`); }
         handler.create(fileContent);
-        if (autoOpen === 'All' || autoOpen === scriptState.name || previewFlag) { toOpen.push(handler); }
-        sentFromTTS[basename] = true;
+        if (autoOpen === scriptState.name || previewFlag) { toOpen.push(handler); }
+        filesRecv[basename] = true;
       });
     }
     // Remove files not received.
     if (!previewFlag) {
-      fs.readdirSync(ttsLuaDir).forEach((file) => {
-        if (!(file in sentFromTTS)) {
-          try { fs.unlinkSync(path.join(ttsLuaDir, file)); } catch (e) { console.error(e); }
-        }
-      });
+      const files = await ws.fs.readDirectory(this.tempUri);
+      await Promise.all(files.filter(([file]) => !(file in filesRecv)).map(([file]) => {
+        const fileUri = this.tempUri.with({ path: posix.join(this.tempUri.path, file) });
+        return ws.fs.delete(fileUri);
+      }));
     }
-    const filesCount = Object.keys(sentFromTTS).length;
-    const toOpenResults = [];
-    for (let index = 0; index < toOpen.length; index += 1) {
-      toOpenResults.push(toOpen[index].open());
-    }
-    Promise.all(toOpenResults).then(() => {
-      // vscode.window.showInformationMessage(`Received ${filesCount} files`);
-      this.updateProgress('Receiving scripts', { increment: 100, message: `Received ${filesCount} files!` });
-      setTimeout(() => {
-        this.finishProgres('Receiving scripts');
-      }, 3000);
+    // Open all pending files
+    Promise.all(toOpen.map((file) => file.open())).then(() => {
     }, (err: Error) => {
       console.error(`Unable to open files: ${err.message}`);
     });
+    const statusBar = wd.setStatusBarMessage(
+      `$(cloud-download) Received ${Object.keys(filesRecv).length} files`,
+    );
+    setTimeout(() => { statusBar.dispose(); }, 1500);
   }
 
-  private static sendToTTS(messageID: number, object?: object) {
-    let out = { messageID };
-    if (object) out = { ...out, ...object };
-
+  /**
+   * Sends a message to the game
+   * @param messageID - Type of message to be sent
+   * @param object - Mutable object according to type
+   */
+  private static async sendToTTS(messageID: TxMsgType, object?: object) {
+    const statusBar = wd.setStatusBarMessage('$(sync~spin) Connecting to TTS');
     const client = net.connect(39999, 'localhost', () => {
-      client.write(JSON.stringify(out));
+      client.write(JSON.stringify({ messageID, ...object }));
+      statusBar.dispose();
+      client.destroy();
     });
     client.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'ECONNREFUSED') {
-        vscode.window.showErrorMessage('ERROR: Unable to connect to Tabletop Simulator.\n\n'
+        statusBar.dispose();
+        wd.showErrorMessage('Unable to connect to Tabletop Simulator.\n\n'
           + 'Check that the game is running and a save has been loaded.\n'
-          + 'If the problem persists, try using the "Save & Play" button in the in-game Modding tab.', { modal: true });
-      } else console.error(`[TTSLua] Client ${err}`);
+          + 'If the problem persists, try using the "Save & Play" button '
+          + 'in the in-game Modding tab.', { modal: true });
+      } else console.error(`[TTSLua] Net Client ${err}`);
     });
     client.on('end', () => client.destroy());
   }
 
-  createOrShowPanel() {
-    const column = vscode.window.activeTextEditor
-      ? vscode.ViewColumn.Active
+  /**
+   * Create and show a webview panel, if it already exists just show it
+   */
+  public createOrShowPanel() {
+    const column = wd.activeTextEditor
+      ? ViewColumn.Active
       : undefined;
     // If a panel exists, show it.
     if (this.webviewPanel) {
@@ -328,14 +371,14 @@ export default class TTSAdapter {
       return;
     }
     // Otherwise, create it
-    const panel = vscode.window.createWebviewPanel(
+    const panel = wd.createWebviewPanel(
       'TTSConsole',
       'Tabletop Simulator Console++',
-      column || vscode.ViewColumn.One,
+      column || ViewColumn.One,
       {
         enableScripts: true, // Enable javascript in the webview
         localResourceRoots: [
-          vscode.Uri.file(path.join(this.extensionPath, 'assets', 'webView')),
+          Uri.file(join(this.extensionPath, 'assets', 'webView')),
         ],
         retainContextWhenHidden: true,
       },
@@ -343,14 +386,18 @@ export default class TTSAdapter {
     this.webviewPanel = this.webviewPanelInit(panel);
   }
 
-  private webviewPanelInit(webviewPanel: vscode.WebviewPanel) {
-    webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview); // Set webview content
-    webviewPanel.onDidDispose(() => this.disposePanel(), null, this.disposables);
-    webviewPanel.onDidChangeViewState(() => {
-      if (webviewPanel.visible) webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview);
+  /**
+   * Sets the content for a webview panel
+   * @param wp - Panel to be initialized
+   */
+  private webviewPanelInit(wp: WebviewPanel) {
+    wp.webview.html = this.getHtmlForWebview(wp.webview); // Set webview content
+    wp.onDidDispose(() => this.disposePanel(), null, this.disposables);
+    wp.onDidChangeViewState(() => {
+      if (wp.visible) wp.webview.html = this.getHtmlForWebview(wp.webview);
     }, null, this.disposables);
     // Handle messages from the webview
-    webviewPanel.webview.onDidReceiveMessage((message) => {
+    wp.webview.onDidReceiveMessage((message: { type: string, text: string }) => {
       switch (message.type) {
         case 'command':
           TTSAdapter.customMessage({ command: message.text });
@@ -359,22 +406,27 @@ export default class TTSAdapter {
           TTSAdapter.customMessage({ input: message.text });
           break;
         case 'done': {
-          const f = this.executeWhenDone;
-          f();
-          this.executeWhenDone = function executeWhenDone() { };
+          this.executeWhenDone();
           break;
         }
         default: break;
       }
     }, null, this.disposables);
-    return webviewPanel;
+    return wp;
   }
 
-  revivePanel(webviewPanel: vscode.WebviewPanel) {
+  /**
+   * Sets a new webviewpanel as current
+   * @param webviewPanel - Panel to be reinitialized
+   */
+  public revivePanel(webviewPanel: WebviewPanel) {
     this.webviewPanel = this.webviewPanelInit(webviewPanel);
   }
 
-  disposePanel() {
+  /**
+   * Disposes of created panel
+   */
+  public disposePanel() {
     // Clean up our resources
     if (this.webviewPanel) {
       this.webviewPanel.dispose();
@@ -389,9 +441,14 @@ export default class TTSAdapter {
     }
   }
 
-  // Send a message to the webview webview.
-  // Assumes panel is initialized
-  appendToPanel(htmlString: string | undefined, optional?: object) {
+  /**
+   * Send a message to the webviewpanel
+   * @param htmlString - String to send to panel
+   * @param optional - Object for extra data
+   * @remarks
+   * Assumes panel is initialized
+   */
+  public appendToPanel(htmlString: string | undefined, optional?: object) {
     if (this.webviewPanel) {
       let msg = { command: 'append', htmlString };
       if (optional) msg = { ...msg, ...optional };
@@ -399,17 +456,26 @@ export default class TTSAdapter {
     }
   }
 
-  clearPanel() {
+  /**
+   * Clears panel of all messages
+   */
+  public clearPanel() {
     if (this.webviewPanel) {
       this.webviewPanel.webview.postMessage({ command: 'clear' });
     }
   }
 
-  private getHtmlForWebview(webview: vscode.Webview) {
-    const scriptPathOnDisk = vscode.Uri.file(path.join(this.extensionPath, 'assets', 'webView', 'js', 'console.js'));
-    const stylePathOnDisk = vscode.Uri.file(path.join(this.extensionPath, 'assets', 'webView', 'css', 'console.css'));
-    const scriptUri = scriptPathOnDisk.with({ scheme: 'vscode-resource' });
-    const styleUri = stylePathOnDisk.with({ scheme: 'vscode-resource' });
+  /**
+   * Returns html string containing structure needed for Console++
+   * @param webview - Webview to render to
+   */
+  private getHtmlForWebview(webview: Webview) {
+    const config = ws.getConfiguration('TTSLua');
+    const assetPath = join(this.extensionPath, 'assets', 'webView');
+    const scriptFileUri = Uri.file(join(assetPath, 'js', 'console.js'));
+    const styleFileUri = Uri.file(join(assetPath, 'css', 'console.css'));
+    const scriptUri = scriptFileUri.with({ scheme: 'vscode-resource' });
+    const styleUri = styleFileUri.with({ scheme: 'vscode-resource' });
     const { cspSource } = webview;
     return `<!DOCTYPE html>
         <html lang="en">
@@ -417,17 +483,22 @@ export default class TTSAdapter {
             <meta charset="UTF-8">
             <style>
             :root {
-              --ttslua-console-font-family: ${vscode.workspace.getConfiguration('TTSLua').get('consoleFontFamily')};
-              --ttslua-console-font-size: ${vscode.workspace.getConfiguration('TTSLua').get('consoleFontSize')};
-              --ttslua-console-input-height: ${vscode.workspace.getConfiguration('TTSLua').get('consoleInputHeight')};
+              --ttslua-console-font-family: ${config.get('consoleFontFamily')};
+              --ttslua-console-font-size: ${config.get('consoleFontSize')};
+              --ttslua-console-input-height: ${config.get('consoleInputHeight')};
             }
             </style>
             <link rel="stylesheet" type="text/css" href="${styleUri}">
-            <!--
-            Here's a content security policy that allows loading local scripts and stylesheets, and loading images over https
-            This content security policy also implicitly disables inline scripts and styles. It is a best practice to extract all inline styles and scripts to external files so that they can be properly loaded without relaxing the content security policy.
-            -->
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https:; script-src ${cspSource} https:; style-src ${cspSource} 'unsafe-inline'; font-src https:;"/>
+            <meta
+              http-equiv="Content-Security-Policy"
+              content="
+                default-src 'none';
+                img-src ${cspSource} https:;
+                script-src ${cspSource} https:;
+                style-src ${cspSource} 'unsafe-inline';
+                font-src https:;
+              "
+            />
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
             <title>Tabletop Simulator Console++</title>
@@ -437,25 +508,13 @@ export default class TTSAdapter {
               <input type="textbox" placeholder=">command"/>
             </div>
             <div id="data"></div>
-            <script id="mainScript" type="module" src="${scriptUri}" clearOnFocus="${vscode.workspace.getConfiguration('TTSLua').get('clearOnFocus')}"></script>
+            <script
+              id="mainScript"
+              type="module"
+              src="${scriptUri}"
+              clearOnFocus="${ws.getConfiguration('TTSLua').get('clearOnFocus')}">
+            />
         </body>
         </html>`;
-  }
-
-  private updateProgress(title: string, options: { increment: number, message?: string }) {
-    if (!(title in this.progressBars)) {
-      vscode.window.withProgress({
-        location: vscode.ProgressLocation.Window,
-        title,
-        cancellable: false,
-      }, (progress) => new Promise((resolve) => { this.progressBars[title] = { resolve, progress }; }));
-    }
-    this.progressBars[title].progress.report(options);
-  }
-
-  private finishProgres(title: string) {
-    if (!(title in this.progressBars)) throw new Error(`[TTSLua] Attempted to finish a non-existant progressbar "${title}"`);
-    this.progressBars[title].resolve();
-    delete this.progressBars[title];
   }
 }

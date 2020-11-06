@@ -61,3 +61,29 @@ body {
 #commandInput > input:focus {
   outline: none;
 }
+
+.bold {
+  font-weight: bold
+}
+
+.italic {
+  font-style: italic
+}
+
+.underline {
+  text-decoration: underline
+}
+
+.lineThrough {
+  text-decoration: line-through
+}
+
+.sub {
+  vertical-align: sub;
+  font-size: smaller;
+}
+
+.sup {
+  vertical-align: super;
+  font-size: smaller;
+}

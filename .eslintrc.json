@@ -7,12 +7,15 @@
     "project": "./tsconfig.json"
   },
   "plugins": [
-    "@typescript-eslint"
+    "@typescript-eslint",
+    "eslint-plugin-tsdoc"
   ],
   "extends": [
     "airbnb-typescript/base"
   ],
   "rules": {
+    "tsdoc/syntax": "warn",
+    "@typescript-eslint/explicit-member-accessibility": "warn",
     "@typescript-eslint/naming-convention": "warn",
     "@typescript-eslint/semi": "warn",
     "curly": "warn",
@@ -25,7 +28,7 @@
     ],
     "no-template-curly-in-string": "off",
     "max-len": [
-      "off",
+      "warn",
       {
         "code": 100
       }
