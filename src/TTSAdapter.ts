@@ -1,3 +1,4 @@
+/* eslint-disable no-await-in-loop */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable no-param-reassign */
 import * as net from 'net';
@@ -12,6 +13,7 @@ import {
 } from 'vscode';
 import { join, posix } from 'path';
 import bundle from 'luabundle';
+import { readFileSync } from 'fs';
 
 import parse from './bbcode/tabletop';
 import { tempFolder, docsFolder, FileHandler } from './filehandler';
@@ -67,13 +69,13 @@ enum TxMsgType {
 
 /**
  * Forms an array with directory paths where to look for files to be included
+ * @param searchPattern - Pattern divided by `;` to form paths with
  */
-function getSearchPaths(): string[] {
+function getSearchPaths(searchPattern: string): string[] {
   const paths: string[] = [];
   const config = ws.getConfiguration('TTSLua');
   const includeOtherFilesPath = config.get('includeOtherFilesPaths') as string;
-  const bundleSearchPattern = config.get('bundleSearchPattern') as string;
-  bundleSearchPattern.split(';').map((pattern) => [
+  searchPattern.split(';').filter((pattern) => pattern.length > 0).map((pattern) => [
     join(tempFolder, pattern),
     join(docsFolder, pattern),
     ...includeOtherFilesPath.split(';').map((p) => join(p, pattern)) || null,
@@ -186,27 +188,29 @@ export default class TTSAdapter {
         if (!(guid in scripts)) scripts[guid] = { name, guid, script: '' };
         // Complete the script placeholder with the content of the file, bundling when needed
         if (file.endsWith('.lua')) {
-          // eslint-disable-next-line no-await-in-loop
-          const luaScript = Buffer.from(await ws.fs.readFile(fileUri)).toString('utf-8');
-          if (ws.getConfiguration('TTSLua').get('includeOtherFiles')) {
+          scripts[guid].script = Buffer.from(await ws.fs.readFile(fileUri)).toString('utf-8');
+          const config = ws.getConfiguration('TTSLua');
+          if (config.get('includeOtherFiles')) {
             try {
-              scripts[guid].script = bundle.bundleString(luaScript, {
-                paths: getSearchPaths(),
+              scripts[guid].script = bundle.bundleString(scripts[guid].script, {
+                paths: getSearchPaths(config.get('bundleSearchPattern') as string),
                 isolate: true,
                 rootModuleName: file,
-                force: true,
               });
             } catch (error: any) {
               wd.showErrorMessage(error.message);
+              console.error(error.stack);
             }
           }
         } else if (file.endsWith('.xml')) {
-          // let horizontalWhitespaceSet = '\\t\\v\\f\\r \u00a0\u2000-\u200b\u2028-\u2029\u3000'
-          // let insertXmlFileRegexp = RegExp('(^|\\n)([' + horizontalWhitespaceSet + ']*)(.*)<Include\\s+src=(\'|")(.+)\\4\\s*/>', 'g')
-          // eslint-disable-next-line no-await-in-loop
-          scripts[guid].ui = Buffer.from(await ws.fs.readFile(fileUri)).toString('utf-8');
+          scripts[guid].ui = TTSAdapter.insertXmlFiles(await ws.fs.readFile(fileUri));
         }
       }
+    }
+    // Validate empty global to avoid corruption
+    if (scripts['-1'].script === '') {
+      wd.showErrorMessage('Global Script must not be empty');
+      return;
     }
     // Once the scripts content has been built, send to game
     // Depending on config, send after clearing panel (Hack)
@@ -295,11 +299,13 @@ export default class TTSAdapter {
           const basename = `${scriptState.name}.${scriptState.guid}.xml`;
           const handler = new FileHandler(basename);
           if (scriptState.ui) {
-            handler.create(scriptState.ui.trim());
+            handler.create(scriptState.ui.replace(
+              /(<!--\s+include\s+([^\s].*)\s+-->)[\s\S]+?\1/g,
+              (matchedText, marker, path) => `<Include src="${path.replace('"', '\\"')}"/>`,
+            ));
           } else handler.create('');
           if (previewFlag) toOpen.push(handler);
           filesRecv[basename] = true;
-          // let insertedXmlFileRegexp = RegExp('(<!--\\s+include\\s+([^\\s].*)\\s+-->)[\\s\\S]+?\\1', 'g')
         }
         // Lua File Creation
         const basename = `${scriptState.name}.${scriptState.guid}.lua`;
@@ -516,5 +522,42 @@ export default class TTSAdapter {
             />
         </body>
         </html>`;
+  }
+
+  /**
+   * Recursive XML Include
+   * @param text - Text to be replaced
+   * @param alreadyInserted - Tracking array to prevent cyclical includes
+   * @remarks
+   * Ported from Atom's Plugin
+   */
+  private static insertXmlFiles(text: string | Uint8Array, alreadyInserted: string[] = []): string {
+    if (typeof text !== 'string') text = Buffer.from(text).toString('utf-8');
+    return text.replace(/(^|\n)([\s]*)(.*)<Include\s+src=('|")(.+)\4\s*\/>/g,
+      (matched, prefix, indentation, content, quote, insertPath): string => {
+        prefix = prefix + indentation + content;
+        const { path, filetext } = getSearchPaths(insertPath).reduce((result, lookupPath) => {
+          if (result.filetext.length > 0 || result.path.length > 0) return result;
+          try {
+            return { filetext: readFileSync(lookupPath).toString('utf-8'), path: lookupPath };
+          } catch (error) {
+            if (error.code !== 'ENOENT') throw error;
+          }
+          return { path: '', filetext: '' };
+        }, { path: '', filetext: '' });
+        const marker = `<!-- include ${insertPath} -->`;
+        if (filetext.length > 0) {
+          if (alreadyInserted.includes(path)) {
+            wd.showErrorMessage(`Cyclical include detected. ${insertPath} was previously included`);
+            return prefix;
+          }
+          alreadyInserted.push(path);
+          const insertText = indentation + TTSAdapter.insertXmlFiles(filetext, alreadyInserted)
+            .replace('\n', `\n${indentation}`);
+          return `${prefix + marker}\n${insertText}\n${indentation}${marker}`;
+        }
+        wd.showErrorMessage(`Could not catalog <Include /> - file not found: ${insertPath}`);
+        return `${prefix + marker}\n${indentation}${marker}`;
+      });
   }
 }

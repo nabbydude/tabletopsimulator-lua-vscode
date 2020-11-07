@@ -13,7 +13,7 @@ Extension for VSCode to make writing Lua scripts for  <a href="https://store.ste
 <div align="center">
 <img src="https://badgen.net/badge/build/should be ok/green"/>
 <img src="https://badgen.net/badge/uses/TS/blue"/>
-<img src="https://badgen.net/badge/designed in/MS Paint/grey"/>
+<img src="https://badgen.net/badge/designed in/MS Paint/yellow"/>
 <img src="https://badgen.net/badge/made%20with/%E2%9D%A4/red"/>
 </div>
 
@@ -22,10 +22,14 @@ Extension for VSCode to make writing Lua scripts for  <a href="https://store.ste
 - Get/Send Scripts
 - Syntax Highlight based on the official [Atom plugin](https://github.com/Berserk-Games/atom-tabletopsimulator-lua)
 - Code autocompletion based on OliPro007's [Extension](https://github.com/OliPro007/vscode-tabletopsimulator-lua)
-- `require()` support
+- Nested file support
+  - `require("")` for Lua
+  - `<Include src=""/>` for XML
+  - Configurable search patterns and lookup directories (yes, plural)
+  - Works with absolute directories, perfect for source controled projects
 - Highly Configurable
 - Built-in Console
-  - Integration with [Console++](https://github.com/onelivesleft/Console) by onelivesleft ([Tutorial](http://blog.onelivesleft.com/2017/09/debugging-your-tts-mods-with-console.html)) w/ Automatic Installation!
+  - Integration with [Console++](https://github.com/onelivesleft/Console) by onelivesleft ([Tutorial](http://blog.onelivesleft.com/2017/09/debugging-your-tts-mods-with-console.html)) w/ One-Click Installation!
   - Send commands from VSCode (Adds `onExternalCommand`)
   - Receive output and debug information on VSCode Panel
   - BBCode and nested colors support!
@@ -65,38 +69,36 @@ Download or clone this repository and place it under:
 - `Ctrl+Alt+L`: Get Lua Scripts
 - `Ctrl+Alt+S`: Save And Play
 
-###### Tip: Press enter or double click on the Console++ Panel to focus the command input at the bottom.
+###### Tip: Press enter or double click on the Console++ Panel to focus the command input at the bottom
 
 ### Recomendations
 
+###### Click each one to expand
+
 <details>
-  <summary>Use enhanced moonsharp</summary>
+  <summary>Debug your Lua code <i>step-by-step</i> with Enhanced Moonsharp</summary>
   
-  ## Heading
+## Enhanced Moonsharp Debugging
+
   1. A numbered
   2. list
-     * With some
-     * Sub bullets
+     - With some
+     - Sub bullets
+
 </details>
 
 <details>
-  <summary>Use emmylua</summary>
+  <summary>Add source control to your projects and keep track of every change to collaborate with other developers</summary>
   
-  ## Heading
-  1. A numbered
-  2. list
-     * With some
-     * Sub bullets
+## Source Control
+
 </details>
 
 <details>
-  <summary>source control</summary>
+  <summary>Enable custom suggestions and avoid errors using static analysis with EmmyLua</summary>
   
-  ## Heading
-  1. A numbered
-  2. list
-     * With some
-     * Sub bullets
+## EmmyLua
+
 </details>
 
 --------

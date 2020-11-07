@@ -23,6 +23,7 @@ body {
   padding-top: 15px;
   padding-bottom: calc((var(--ttslua-console-input-height) * 1px) + 13px);
   margin-bottom:3px;
+  white-space:pre;
 }
 
 #data > div {

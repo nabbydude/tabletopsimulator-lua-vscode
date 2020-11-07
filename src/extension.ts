@@ -1,12 +1,8 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import TTSAdapter from './TTSAdapter';
 import activateCompletion from './language/completion';
-import { createWorkspaceFolder, installConsole } from './filehandler';
+import { createWorkspaceFolder, installConsole, addDocsFolderToWorkspace } from './filehandler';
 
-// this method is called when your extension is activated
-// your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
   /* ----------------------------- Initialization ----------------------------- */
   createWorkspaceFolder();
@@ -14,17 +10,30 @@ export function activate(context: vscode.ExtensionContext) {
   const adapter = new TTSAdapter(context.extensionPath);
   console.debug('[TTSLua] Tabletop Simulator Extension Loaded');
   /* ------------------------- Command Registration ------------------------- */
+  // Add default include folder to workspace
+  context.subscriptions.push(
+    vscode.commands.registerCommand('ttslua.addDocsFolderToWorkspace', async () => {
+      addDocsFolderToWorkspace();
+    }),
+  );
   // Open Panel
   context.subscriptions.push(
     vscode.commands.registerCommand('ttslua.openConsole', async () => {
       adapter.createOrShowPanel();
-      // const file = await vscode.workspace.fs.readFile(vscode.Uri.file('./asdhjk.txt'));
-      // console.log('another thing');
     }),
   );
   // Get Scripts
   context.subscriptions.push(
     vscode.commands.registerCommand('ttslua.getScripts', async () => {
+      const chosen = await vscode.window.showInformationMessage(
+        'Get Lua Scripts from game?\n\n'
+        + 'This will erase any changes that you have made in'
+        + ' Visual Studio Code since the last Save & Play.',
+        { modal: true },
+        'Get Scripts',
+      );
+      if (chosen === 'Get Scripts') adapter.getScripts();
+      // // Alternative confirmation dialog
       // const option = await vscode.window.showQuickPick([
       //   {
       //     label: 'Get Scripts',
@@ -35,17 +44,6 @@ export function activate(context: vscode.ExtensionContext) {
       //   placeHolder: 'Get Lua Scripts from game?',
       // });
       // if (option && option.label === 'Get Scripts') adapter.getScripts();
-
-      // // Alternative confirmation dialog
-      // const Choice = 'Get Scripts';
-      const chosen = await vscode.window.showInformationMessage(
-        'Get Lua Scripts from game?\n\n'
-        + 'This will erase any changes that you have made in'
-        + ' Visual Studio Code since the last Save & Play.',
-        { modal: true },
-        'Get Scripts',
-      );
-      if (chosen === 'Get Scripts') adapter.getScripts();
     }),
   );
   // Save And Play
@@ -58,8 +56,6 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('ttslua.installConsole', () => {
       installConsole(context.extensionPath);
-      //
-      // something
     }),
   );
 
@@ -75,5 +71,4 @@ export function activate(context: vscode.ExtensionContext) {
   }
 }
 
-// this method is called when your extension is deactivated
 export function deactivate() { console.debug('Tabletop Simulator Extension Unloaded'); }

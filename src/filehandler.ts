@@ -11,6 +11,17 @@ export async function createWorkspaceFolder() {
   } catch (reason: any) { wd.showErrorMessage(`Failed to create workspace folder: ${reason}`); }
 }
 
+export async function addDocsFolderToWorkspace() {
+  const vsFolders = ws.workspaceFolders;
+  const docsUri = Uri.file(docsFolder);
+  if (!vsFolders || vsFolders.findIndex((dir) => dir.uri.fsPath === docsUri.fsPath) === -1) {
+    ws.updateWorkspaceFolders(vsFolders ? vsFolders.length : 0, null, {
+      uri: docsUri,
+      name: 'TTS Includes',
+    });
+  }
+}
+
 export async function installConsole(extensionPath: string) {
   const sourceUri = Uri.file(join(extensionPath, 'scripts'));
   const targetUri = Uri.file(docsFolder);

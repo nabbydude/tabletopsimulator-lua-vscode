@@ -30,6 +30,7 @@
     "onCommand:ttslua.getScripts",
     "onCommand:ttslua.saveAndPlay",
     "onCommand:ttslua.installConsole",
+    "onCommand:ttslua.addDocsFolderToWorkspace",
     "workspaceContains:**/.lua"
   ],
   "main": "dist/extension.js",
@@ -73,6 +74,11 @@
         "command": "ttslua.installConsole",
         "title": "Install Console++",
         "category": "TTSLua"
+      },
+      {
+        "command": "ttslua.addDocsFolderToWorkspace",
+        "title": "Add the default include folder to workspace (/Documents/Tabletop Simulator)",
+        "category": "TTSLua"
       }
     ],
     "menus": {
@@ -88,6 +94,9 @@
         },
         {
           "command": "ttslua.installConsole"
+        },
+        {
+          "command": "ttslua.addDocsFolderToWorkspace"
         }
       ],
       "editor/context": [
