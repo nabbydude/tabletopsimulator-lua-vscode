@@ -2,7 +2,7 @@ import { tmpdir, homedir } from 'os';
 import { join, normalize, dirname } from 'path';
 import { workspace as ws, window as wd, Uri } from 'vscode';
 
-export const tempFolder = join(tmpdir(), 'TabletopSimulator', 'Tabletop Simulator Scripts');
+export const tempFolder = join(tmpdir(), 'TabletopSimulator', 'Tabletop Simulator Lua');
 export const docsFolder = join(homedir(), 'Documents', 'Tabletop Simulator');
 
 export async function createWorkspaceFolder() {

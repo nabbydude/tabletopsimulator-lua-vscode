@@ -71,14 +71,15 @@ enum TxMsgType {
  * Forms an array with directory paths where to look for files to be included
  * @param searchPattern - Pattern divided by `;` to form paths with
  */
-function getSearchPaths(searchPattern: string): string[] {
+function getSearchPaths(searchPattern: string[]): string[] {
   const paths: string[] = [];
   const config = ws.getConfiguration('TTSLua');
-  const includeOtherFilesPath = config.get('includeOtherFilesPaths') as string;
-  searchPattern.split(';').filter((pattern) => pattern.length > 0).map((pattern) => [
-    join(tempFolder, pattern),
+  const includeOtherFilesPaths = config.get('includeOtherFilesPaths') as string[];
+  searchPattern.filter((pattern) => pattern.length > 0).map((pattern) => [
     join(docsFolder, pattern),
-    ...includeOtherFilesPath.split(';').map((p) => join(p, pattern)) || null,
+    ...includeOtherFilesPaths.map((p) => join(p, pattern)) || null,
+    ...ws.workspaceFolders!.map((val) => join(val.uri.fsPath, pattern)) || null,
+    pattern, // For absolute paths
   ]).map((combo) => paths.push(...combo));
   return paths;
 }
@@ -156,8 +157,9 @@ export default class TTSAdapter {
     const vsFolders = ws.workspaceFolders;
     if (!vsFolders || vsFolders.findIndex((dir) => dir.uri.fsPath === this.tempUri.fsPath) === -1) {
       wd.showErrorMessage(
-        'The workspace is not opened on the Tabletop Simulator folder.\n'
+        'The workspace does not contain the Tabletop Simulator folder.\n'
         + 'Get Lua Scripts from game before trying to Save and Play.',
+        { modal: true },
       );
       return;
     }
@@ -193,7 +195,7 @@ export default class TTSAdapter {
           if (config.get('includeOtherFiles')) {
             try {
               scripts[guid].script = bundle.bundleString(scripts[guid].script, {
-                paths: getSearchPaths(config.get('bundleSearchPattern') as string),
+                paths: getSearchPaths(config.get('bundleSearchPattern') as string[]),
                 isolate: true,
                 rootModuleName: file,
               });
@@ -266,8 +268,11 @@ export default class TTSAdapter {
       case RxMsgType.Return: break; // Not implemented
       case RxMsgType.GameSaved:
         if (ws.getConfiguration('TTSLua').get('logSave')) {
-          const today = new Date();
-          const timestamp = `${today.getHours()}:${today.getMinutes()}:${today.getSeconds()}`;
+          const d = new Date();
+          const h = `${d.getHours()}`.padStart(2, '0');
+          const m = `${d.getMinutes()}`.padStart(2, '0');
+          const s = `${d.getSeconds()}`.padStart(2, '0');
+          const timestamp = `${h}:${m}:${s}`;
           this.appendToPanel(`[${timestamp}] 💾 Game Saved`);
         }
         break;
@@ -369,7 +374,7 @@ export default class TTSAdapter {
    */
   public createOrShowPanel() {
     const column = wd.activeTextEditor
-      ? ViewColumn.Active
+      ? ViewColumn.Beside
       : undefined;
     // If a panel exists, show it.
     if (this.webviewPanel) {
@@ -536,7 +541,7 @@ export default class TTSAdapter {
     return text.replace(/(^|\n)([\s]*)(.*)<Include\s+src=('|")(.+)\4\s*\/>/g,
       (matched, prefix, indentation, content, quote, insertPath): string => {
         prefix = prefix + indentation + content;
-        const { path, filetext } = getSearchPaths(insertPath).reduce((result, lookupPath) => {
+        const { path, filetext } = getSearchPaths([insertPath]).reduce((result, lookupPath) => {
           if (result.filetext.length > 0 || result.path.length > 0) return result;
           try {
             return { filetext: readFileSync(lookupPath).toString('utf-8'), path: lookupPath };

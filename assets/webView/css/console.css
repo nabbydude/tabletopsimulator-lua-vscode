@@ -21,13 +21,13 @@ body {
   font-size: calc(var(--ttslua-console-font-size) * 1px);
   padding: 0;
   padding-top: 15px;
-  padding-bottom: calc((var(--ttslua-console-input-height) * 1px) + 13px);
+  padding-bottom: calc((var(--ttslua-console-input-height) * 1px) + 13px + 10px);
   margin-bottom:3px;
   white-space:pre;
 }
 
 #data > div {
-  padding-left: 20px;
+  padding-left: 10px;
   padding-right: 20px;
 }
 

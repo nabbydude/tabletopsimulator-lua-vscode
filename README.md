@@ -29,7 +29,7 @@ Extension for VSCode to make writing Lua scripts for  <a href="https://store.ste
   - Works with absolute directories, perfect for source controled projects
 - Highly Configurable
 - Built-in Console
-  - Integration with [Console++](https://github.com/onelivesleft/Console) by onelivesleft ([Tutorial](http://blog.onelivesleft.com/2017/09/debugging-your-tts-mods-with-console.html)) w/ One-Click Installation!
+  - Integration with [Console++](https://github.com/onelivesleft/Console) by onelivesleft ([Tutorial](http://blog.onelivesleft.com/2017/09/debugging-your-tts-mods-with-console.html)) w/ Automatic Installation!
   - Send commands from VSCode (Adds `onExternalCommand`)
   - Receive output and debug information on VSCode Panel
   - BBCode and nested colors support!
@@ -80,10 +80,7 @@ Download or clone this repository and place it under:
   
 ## Enhanced Moonsharp Debugging
 
-  1. A numbered
-  2. list
-     - With some
-     - Sub bullets
+WIP
 
 </details>
 
@@ -92,6 +89,8 @@ Download or clone this repository and place it under:
   
 ## Source Control
 
+WIP
+
 </details>
 
 <details>
@@ -99,11 +98,13 @@ Download or clone this repository and place it under:
   
 ## EmmyLua
 
+WIP
+
 </details>
 
 --------
 
-#### Console++
+### Console++
 
 This extension proves a quick and easy way to install Console++
 
@@ -132,39 +133,66 @@ function onExternalCommand(input)
 end
 ```
 
+### Nested File Feature
+
+This extension, similar to the official Atom Plugin, allows developers to structure their scripts among several files, the way of doing so is with the following statements:
+
+- `require("<FILE>")` for Lua
+- `<Include src="<FILE>"/>` for XML
+
+###### Replacing `<File>` for the filename you wish to retrieve, also works for absolute paths
+
+Theres an ordered priority list from which these files will be looked up from, stopping at the first match:
+
+1. Documents Folder: `~/Documents/Tabletop Simulator`
+2. Folders described in `TTSLua.includeOtherFilesPaths` setting
+3. Folders currently opened in the workspace
+
+And specifically for Lua, the `TTSLua.searchBundlePattern` setting allows modification of the lookup pattern. The extension will look for files ending with `.ttslua` and `.lua` by default.
+
+## Commands
+
+Commands can be triggered either by hotkey or via the Command Palette (`Ctrl+Shift+P`)
+
+| Command                         | Description                                                                                                                                           | Hotkey          |
+|---------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------|
+| Open TTS Console++              | This command will open the Console++ Panel in VSCode to the side, where you'll find messages sent from the game and be able to send your own commands | ``Ctrl+Alt+` `` |
+| Get Lua Scripts                 | Once confirmed, this will pull all scripts from the game to the editor                                                                                | `Ctrl+Alt+L`    |
+| Save And Play                   | This will save all currently modified files and then push them to be executed on the game                                                             | `Ctrl+Alt+S`    |
+| Install Console++               | This is the automated install, once finished you'll be able to require Console++ in your scripts like so `require('vscode/console')`                  | Palette Only    |
+| Add include folder to workspace | Use this command to quickly add the default include folder to your workspace (`~/Documents/Tabletop Simulator`)                                       | Palette Only    |
+
 ## Extension Settings
 
 This extension contributes the following settings:
 
-- `TTSLua.autoOpen`: Which files should be opened automatically. (Default: `Global`)
-- `TTSLua.clearOnReload`: Enable to clear console history when reloading. (Default: `false`)
-- `TTSLua.consoleFontFamily`: Font family for console. (Default `Amaranth`)
-- `TTSLua.consoleFontSize`: Font size for console in pixels. (Default `18`)
-- `TTSLua.consoleInputHeight`: Set Height for command input in pixels. (Default: `15`)
-- `TTSLua.coroutinePostfix`: Postfix to be appended to coroutine functions. (Default: `_routine`)
-- `TTSLua.createXml`: Create XML UI File for each Lua received. (Default: `false`)
-- `TTSLua.clearOnFocus`: Enable to clear command input on input focus. (Default: `false`)
-- `TTSLua.guidPostfix`: Postfix of variable when guessing `getObjectFromGUID`. (Default: `_GUID`)
-- `TTSLua.includeOtherFiles`: Insert other files specified in source code (Default: `true`)
-- `TTSLua.includeOtherFilesPaths`: Additional paths to search for files. (Default: `''`)
-- `TTSLua.bundleSearchPattern`: Pattern used to look for additional files. (Default: `?.ttslua;?.lua;`)
-- `TTSLua.logSave`: Enable to log a message when a save occurs. (Default: `true`)
-- `TTSLua.parameterFormat`: Formatting  for Autocomplete. (Default: `TYPE_name`)
-- `TTSLua.parameterToDisplay`: Autocomplete parameter insertion. (Default: `Both`)
+| Setting                         | Description                                           | Default                |
+|---------------------------------|-------------------------------------------------------|------------------------|
+| `TTSLua.autoOpen`               | Which files should be opened automatically            | `Global`               |
+| `TTSLua.clearOnReload`          | Enable to clear console history when reloading        | `false`                |
+| `TTSLua.consoleFontFamily`      | Font family for console                               | `Amaranth`             |
+| `TTSLua.consoleFontSize`        | Font size for console in pixels                       | `16`                   |
+| `TTSLua.consoleInputHeight`     | Set Height for command input in pixels                | `27`                   |
+| `TTSLua.coroutinePostfix`       | Postfix to be appended to coroutine functions         | `_routine`             |
+| `TTSLua.createXml`              | Create XML UI File for each Lua received              | `false`                |
+| `TTSLua.clearOnFocus`           | Enable to clear command input on input focus          | `false`                |
+| `TTSLua.guidPostfix`            | Postfix of variable when guessing `getObjectFromGUID` | `_GUID`                |
+| `TTSLua.includeOtherFiles`      | Enable file nesting                                   | `true`                 |
+| `TTSLua.includeOtherFilesPaths` | Additional paths to search for files                  | `[]`                   |
+| `TTSLua.bundleSearchPattern`    | Pattern used to look for additional files             | `["?.ttslua","?.lua"]` |
+| `TTSLua.logSave`                | Enable to log a message when a save occurs            | `true`                 |
+| `TTSLua.parameterFormat`        | Formatting for Autocomplete                           | `TYPE_name`            |
+| `TTSLua.parameterToDisplay`     | Autocomplete parameter insertion                      | `Both`                 |
 
 ## Known Issues
 
-Execute Lua Code is not supported.
+###### In order from most difficult to least difficult to fix
 
-Partial theme support. Needs more testing.
-
-`require()` doesn't work for XML UI Files.
-
-Line numbers on error are mismatched when using `require()`.
-
-Command Input has no history. (`Arrow Up`)
-
-Console panel sometimes displays print messages out of order.
+1. Console panel sometimes displays print messages out of order.
+2. Line numbers on error are mismatched when using `require()`.
+3. Execute Lua Code is not supported.
+4. Command Input has no history. (`Arrow Up`)
+5. Partial theme support. Needs more testing.
 
 ## Release Notes
 

@@ -35,6 +35,7 @@
     "./node_modules/vscode/vscode.d.ts",
     "./node_modules/vscode/lib/*",
     "src/utils/getCoreNodeModule.js",
-    "webpack.config.js"
+    "webpack.config.js",
+    "assets/webView/js/console.js",
   ]
 }
